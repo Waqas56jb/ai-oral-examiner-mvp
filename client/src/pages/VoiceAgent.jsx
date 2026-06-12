@@ -35,23 +35,41 @@ const STATE_META = {
 
 export default function VoiceAgent() {
   const navigate = useNavigate()
-  const { setSessionData } = useExam()
+  const { setSessionData, examProgress, setExamProgress } = useExam()
+
+  // Restore from saved progress if page was refreshed mid-session
+  const saved = examProgress
 
   const [examState,   setExamState]   = useState('idle')
   const [running,     setRunning]     = useState(false)
-  const [sessionSec,  setSessionSec]  = useState(0)
-  const [wordCount,   setWordCount]   = useState(0)
-  const [confidence,  setConfidence]  = useState('—')
+  const [sessionSec,  setSessionSec]  = useState(saved?.sessionSec  ?? 0)
+  const [wordCount,   setWordCount]   = useState(saved?.wordCount   ?? 0)
+  const [confidence,  setConfidence]  = useState(saved?.confidence  ?? '—')
   const [latency,     setLatency]     = useState('—')
+  const [restored,    setRestored]    = useState(!!saved)
 
   const runningRef      = useRef(false)
-  const cycleIdxRef     = useRef(0)
-  const cycleTimerRef   = useRef(null)
+  const cycleIdxRef     = useRef(saved?.cycleIdx    ?? 0)
   const sessionTimerRef = useRef(null)
-  const sessionSecRef   = useRef(0)
-  const wordCountRef    = useRef(0)
-  const confidenceArr   = useRef([])
-  const transcriptRef   = useRef([])
+  const cycleTimerRef   = useRef(null)
+  const sessionSecRef   = useRef(saved?.sessionSec  ?? 0)
+  const wordCountRef    = useRef(saved?.wordCount   ?? 0)
+  const confidenceArr   = useRef(saved?.confidenceArr ?? [])
+  const transcriptRef   = useRef(saved?.transcript   ?? [])
+
+  /* Save progress snapshot every time a cycle completes */
+  const saveProgress = useCallback(() => {
+    setExamProgress({
+      sessionSec:    sessionSecRef.current,
+      wordCount:     wordCountRef.current,
+      cycleIdx:      cycleIdxRef.current,
+      confidence:    confidenceArr.current.length
+        ? Math.round(confidenceArr.current.reduce((a,b)=>a+b,0) / confidenceArr.current.length) + '%'
+        : '—',
+      confidenceArr: confidenceArr.current,
+      transcript:    transcriptRef.current,
+    })
+  }, [setExamProgress])
 
   const startTimer = useCallback(() => {
     clearInterval(sessionTimerRef.current)
@@ -76,6 +94,7 @@ export default function VoiceAgent() {
     wordCountRef.current = w1
     setWordCount(w1)
     transcriptRef.current.push({ role: 'examiner', text: cas.q, time: fmtTime(sessionSecRef.current) })
+    saveProgress()
 
     cycleTimerRef.current = setTimeout(() => {
       if (!runningRef.current) return
@@ -92,6 +111,7 @@ export default function VoiceAgent() {
         setWordCount(w2)
         transcriptRef.current.push({ role: 'candidate', text: cas.a, time: fmtTime(sessionSecRef.current) })
         cycleIdxRef.current = idx + 1
+        saveProgress()
 
         cycleTimerRef.current = setTimeout(() => {
           if (!runningRef.current) return
@@ -99,17 +119,20 @@ export default function VoiceAgent() {
         }, 3500 + Math.random() * 1500)
       }, 1000 + Math.random() * 600)
     }, 2500 + Math.random() * 1500)
-  }, [])
+  }, [saveProgress])
 
-  const startSession = useCallback(() => {
-    runningRef.current    = true
-    cycleIdxRef.current   = 0
-    sessionSecRef.current = 0
-    wordCountRef.current  = 0
-    confidenceArr.current = []
-    transcriptRef.current = []
-    setSessionSec(0); setWordCount(0); setConfidence('—'); setLatency('—')
+  const startSession = useCallback((resume = false) => {
+    if (!resume) {
+      cycleIdxRef.current   = 0
+      sessionSecRef.current = 0
+      wordCountRef.current  = 0
+      confidenceArr.current = []
+      transcriptRef.current = []
+      setSessionSec(0); setWordCount(0); setConfidence('—')
+    }
+    runningRef.current = true
     setRunning(true)
+    setRestored(false)
     startTimer()
     runCycle()
   }, [startTimer, runCycle])
@@ -120,7 +143,8 @@ export default function VoiceAgent() {
     clearTimeout(cycleTimerRef.current)
     clearInterval(sessionTimerRef.current)
     setExamState('idle')
-  }, [])
+    saveProgress()
+  }, [saveProgress])
 
   const endSession = useCallback(() => {
     runningRef.current = false
@@ -128,9 +152,11 @@ export default function VoiceAgent() {
     clearTimeout(cycleTimerRef.current)
     clearInterval(sessionTimerRef.current)
     setExamState('idle')
+
     const avgConf = confidenceArr.current.length
       ? Math.round(confidenceArr.current.reduce((a, b) => a + b, 0) / confidenceArr.current.length)
       : 0
+
     setSessionData({
       durationSec:       sessionSecRef.current,
       questionsAnswered: cycleIdxRef.current,
@@ -146,10 +172,15 @@ export default function VoiceAgent() {
     if (running) pauseSession(); else startSession()
   }, [running, startSession, pauseSession])
 
+  /* On mount: if we have saved progress, wait for user action (restored banner).
+     Otherwise auto-start fresh after 900ms. */
   useEffect(() => {
-    const t = setTimeout(() => startSession(), 900)
+    if (!saved) {
+      const t = setTimeout(() => startSession(), 900)
+      return () => clearTimeout(t)
+    }
+    // If there was saved progress, the user sees a "Resume" banner — no auto-start
     return () => {
-      clearTimeout(t)
       clearTimeout(cycleTimerRef.current)
       clearInterval(sessionTimerRef.current)
     }
@@ -162,6 +193,24 @@ export default function VoiceAgent() {
   return (
     <div className="va-bg">
       <div className={`va-card state-${examState}`}>
+
+        {/* Restore banner — only shown after page refresh with saved progress */}
+        {restored && (
+          <div className="va-restore-banner">
+            <div className="va-restore-text">
+              <span className="va-restore-icon">↩</span>
+              Session restored — {fmtTime(sessionSec)} elapsed
+            </div>
+            <div className="va-restore-actions">
+              <button className="va-restore-btn va-restore-resume" onClick={() => startSession(true)}>
+                Resume
+              </button>
+              <button className="va-restore-btn va-restore-new" onClick={() => { setRestored(false); startSession(false) }}>
+                New
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Header */}
         <div className="va-header">
@@ -211,7 +260,7 @@ export default function VoiceAgent() {
 
         {/* Controls */}
         <div className="va-controls">
-          <button className="va-btn-sm" title="End session" onClick={endSession}>
+          <button className="va-btn-sm" title="End session & view report" onClick={endSession}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
@@ -232,7 +281,7 @@ export default function VoiceAgent() {
             )}
           </button>
 
-          <button className="va-btn-sm" title="View report" onClick={endSession}>
+          <button className="va-btn-sm" title="End & view report" onClick={endSession}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
               <polyline points="14 2 14 8 20 8"/>
@@ -244,22 +293,10 @@ export default function VoiceAgent() {
 
         {/* Stats */}
         <div className="va-stats">
-          <div className="va-stat">
-            <div className="va-sv">{latency}</div>
-            <div className="va-sk">Latency</div>
-          </div>
-          <div className="va-stat">
-            <div className="va-sv">{timeStr}</div>
-            <div className="va-sk">Duration</div>
-          </div>
-          <div className="va-stat">
-            <div className="va-sv">{confidence}</div>
-            <div className="va-sk">Confidence</div>
-          </div>
-          <div className="va-stat">
-            <div className="va-sv">{wordCount}</div>
-            <div className="va-sk">Words</div>
-          </div>
+          <div className="va-stat"><div className="va-sv">{latency}</div><div className="va-sk">Latency</div></div>
+          <div className="va-stat"><div className="va-sv">{timeStr}</div><div className="va-sk">Duration</div></div>
+          <div className="va-stat"><div className="va-sv">{confidence}</div><div className="va-sk">Confidence</div></div>
+          <div className="va-stat"><div className="va-sv">{wordCount}</div><div className="va-sk">Words</div></div>
         </div>
 
       </div>

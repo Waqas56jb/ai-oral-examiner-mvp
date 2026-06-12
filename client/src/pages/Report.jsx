@@ -5,11 +5,16 @@ import './Report.css'
 
 export default function Report() {
   const navigate = useNavigate()
-  const { sessionData } = useExam()
+  const { sessionData, clearSession } = useExam()
 
-  /* Redirect if no session data */
+  /* If context was wiped by refresh, data is already rehydrated from
+     sessionStorage inside ExamContext — so sessionData will be populated.
+     Only redirect if genuinely no data exists anywhere. */
   useEffect(() => {
-    if (!sessionData) navigate('/')
+    if (!sessionData) {
+      const t = setTimeout(() => navigate('/'), 100)
+      return () => clearTimeout(t)
+    }
   }, [sessionData, navigate])
 
   if (!sessionData) return null
@@ -148,7 +153,7 @@ export default function Report() {
             </svg>
             Download Report
           </button>
-          <button className="rp-btn rp-btn-new" onClick={() => navigate('/exam')}>
+          <button className="rp-btn rp-btn-new" onClick={() => { clearSession(); navigate('/exam') }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
               <path d="M19 10v2a7 7 0 01-14 0v-2" />
