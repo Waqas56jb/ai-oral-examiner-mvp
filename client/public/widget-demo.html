@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PassGP Widget — Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+      background: #f9fafb;
+      color: #111827;
+      min-height: 100vh;
+    }
+
+    /* ── Nav ── */
+    nav {
+      background: #fff;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 0 40px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .nav-logo {
+      font-size: 18px;
+      font-weight: 700;
+      color: #111827;
+      letter-spacing: -0.02em;
+    }
+    .nav-logo span { color: #6366f1; }
+    .nav-links {
+      display: flex;
+      gap: 28px;
+      list-style: none;
+    }
+    .nav-links a {
+      font-size: 14px;
+      font-weight: 500;
+      color: #6b7280;
+      text-decoration: none;
+    }
+    .nav-links a:hover { color: #111827; }
+    .nav-cta {
+      background: #6366f1;
+      color: #fff !important;
+      padding: 8px 18px;
+      border-radius: 8px;
+      font-weight: 600 !important;
+      font-size: 13px !important;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      max-width: 720px;
+      margin: 80px auto 0;
+      padding: 0 24px;
+      text-align: center;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #ede9fe;
+      color: #6d28d9;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 100px;
+      margin-bottom: 24px;
+      letter-spacing: 0.01em;
+    }
+    .hero h1 {
+      font-size: clamp(32px, 5vw, 52px);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      color: #111827;
+      line-height: 1.1;
+      margin-bottom: 20px;
+    }
+    .hero h1 span { color: #6366f1; }
+    .hero p {
+      font-size: 17px;
+      color: #6b7280;
+      line-height: 1.7;
+      max-width: 540px;
+      margin: 0 auto 36px;
+    }
+
+    /* ── Embed code box ── */
+    .embed-section {
+      max-width: 720px;
+      margin: 60px auto 0;
+      padding: 0 24px 80px;
+    }
+    .embed-section h2 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+    .embed-section p {
+      font-size: 14px;
+      color: #6b7280;
+      margin-bottom: 20px;
+    }
+    .code-card {
+      background: #0f172a;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+    }
+    .code-header {
+      background: #1e293b;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .code-dots {
+      display: flex;
+      gap: 6px;
+    }
+    .code-dots span {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+    }
+    .code-dots span:nth-child(1) { background: #ef4444; }
+    .code-dots span:nth-child(2) { background: #f59e0b; }
+    .code-dots span:nth-child(3) { background: #10b981; }
+    .code-lang {
+      font-size: 11px;
+      color: rgba(255,255,255,0.3);
+      font-family: monospace;
+      letter-spacing: 0.05em;
+    }
+    .copy-btn {
+      background: rgba(99,102,241,0.2);
+      border: 1px solid rgba(99,102,241,0.35);
+      color: #a5b4fc;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.15s;
+    }
+    .copy-btn:hover { background: rgba(99,102,241,0.35); color: #c7d2fe; }
+    pre {
+      padding: 24px 22px;
+      font-family: 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 13px;
+      line-height: 1.75;
+      color: #e2e8f0;
+      overflow-x: auto;
+    }
+    .tk-tag    { color: #93c5fd; }
+    .tk-attr   { color: #86efac; }
+    .tk-str    { color: #fca5a5; }
+    .tk-comm   { color: #475569; }
+
+    /* ── Feature cards ── */
+    .features {
+      max-width: 720px;
+      margin: 48px auto 0;
+      padding: 0 24px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+    @media (max-width: 560px) { .features { grid-template-columns: 1fr; } }
+    .feat-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 16px;
+      padding: 20px;
+    }
+    .feat-icon {
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+    .feat-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #111827;
+      margin-bottom: 5px;
+      letter-spacing: -0.01em;
+    }
+    .feat-desc {
+      font-size: 12px;
+      color: #9ca3af;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Nav -->
+  <nav>
+    <div class="nav-logo">Pass<span>GP</span></div>
+    <ul class="nav-links">
+      <li><a href="#">Pricing</a></li>
+      <li><a href="#">Docs</a></li>
+      <li><a href="#embed">Embed</a></li>
+      <li><a href="https://ai-oral-frontend.vercel.app/" target="_blank" class="nav-cta">Open Examiner</a></li>
+    </ul>
+  </nav>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-badge">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><path d="M12 19v4m-4 0h8"/></svg>
+      AI Voice Oral Examiner
+    </div>
+    <h1>Embed a <span>live GP examiner</span><br>on any page</h1>
+    <p>One script tag. Your candidates get a real-time AI oral examiner with full voice interaction, instant feedback and downloadable reports — right inside your Kajabi or Jotform page.</p>
+  </div>
+
+  <!-- Feature cards -->
+  <div class="features">
+    <div class="feat-card">
+      <div class="feat-icon">🎙️</div>
+      <div class="feat-title">Real-time Voice</div>
+      <div class="feat-desc">Low-latency two-way voice with OpenAI Realtime API and WebRTC.</div>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">📋</div>
+      <div class="feat-title">Session Reports</div>
+      <div class="feat-desc">Auto-generated transcript and performance report after every session.</div>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon">🔌</div>
+      <div class="feat-title">One Script Embed</div>
+      <div class="feat-desc">Paste one line into any HTML page. Works with Kajabi, Jotform, WordPress.</div>
+    </div>
+  </div>
+
+  <!-- Embed code -->
+  <div class="embed-section" id="embed">
+    <h2>Add to your website</h2>
+    <p>Paste this single line just before your <code>&lt;/body&gt;</code> tag on any page.</p>
+    <div class="code-card">
+      <div class="code-header">
+        <div class="code-dots">
+          <span></span><span></span><span></span>
+        </div>
+        <span class="code-lang">HTML</span>
+        <button class="copy-btn" onclick="copyEmbed(this)">Copy</button>
+      </div>
+      <pre id="embed-code"><span class="tk-comm">&lt;!-- PassGP AI Oral Examiner Widget --&gt;</span>
+<span class="tk-tag">&lt;script</span>
+  <span class="tk-attr">src</span>=<span class="tk-str">"https://ai-oral-frontend.vercel.app/widget.js"</span>
+  <span class="tk-attr">defer</span>
+<span class="tk-tag">&gt;&lt;/script&gt;</span></pre>
+    </div>
+
+    <br>
+    <p>Or use a direct <strong>iframe</strong> embed:</p>
+    <div class="code-card">
+      <div class="code-header">
+        <div class="code-dots">
+          <span></span><span></span><span></span>
+        </div>
+        <span class="code-lang">HTML — iframe</span>
+        <button class="copy-btn" onclick="copyIframe(this)">Copy</button>
+      </div>
+      <pre id="iframe-code"><span class="tk-tag">&lt;iframe</span>
+  <span class="tk-attr">src</span>=<span class="tk-str">"https://ai-oral-frontend.vercel.app/exam"</span>
+  <span class="tk-attr">width</span>=<span class="tk-str">"390"</span>
+  <span class="tk-attr">height</span>=<span class="tk-str">"700"</span>
+  <span class="tk-attr">style</span>=<span class="tk-str">"border:none;border-radius:28px;box-shadow:0 8px 40px rgba(0,0,0,0.18)"</span>
+  <span class="tk-attr">allow</span>=<span class="tk-str">"microphone"</span>
+  <span class="tk-attr">title</span>=<span class="tk-str">"PassGP AI Oral Examiner"</span>
+<span class="tk-tag">&gt;&lt;/iframe&gt;</span></pre>
+    </div>
+  </div>
+
+  <!-- Widget script -->
+  <script src="./widget.js"></script>
+
+  <script>
+    function copyEmbed(btn) {
+      const text = `<!-- PassGP AI Oral Examiner Widget -->\n<script src="https://ai-oral-frontend.vercel.app/widget.js" defer><\/script>`;
+      navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = 'Copy', 2000);
+      });
+    }
+    function copyIframe(btn) {
+      const text = `<iframe\n  src="https://ai-oral-frontend.vercel.app/exam"\n  width="390"\n  height="700"\n  style="border:none;border-radius:28px;box-shadow:0 8px 40px rgba(0,0,0,0.18)"\n  allow="microphone"\n  title="PassGP AI Oral Examiner"\n></iframe>`;
+      navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = 'Copy', 2000);
+      });
+    }
+  </script>
+
+</body>
+</html>
