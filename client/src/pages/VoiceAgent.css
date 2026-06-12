@@ -1,61 +1,77 @@
 /* ══════════════════════════════════════
-   VOICE AGENT — Clean, human, friendly
+   VOICE AGENT — Full card, big orb
    ══════════════════════════════════════ */
 
 :root {
-  --accent:    #6366f1;
-  --accent-lg: #818cf8;
-  --listen:    #10b981;
-  --think:     #8b5cf6;
-  --speak:     #f59e0b;
+  --accent:  #6366f1;
+  --listen:  #10b981;
+  --think:   #8b5cf6;
+  --speak:   #f59e0b;
 }
 
+/* ── Page background ────────────────── */
 .va-bg {
   height: 100svh;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 16px;
-  background: #0c0e1a;
-  position: relative;
+  background: #090b17;
   overflow: hidden;
+  position: relative;
 }
-
-/* Soft background glow */
+/* big soft ambient glow */
 .va-bg::before {
   content: '';
   position: absolute;
-  width: 480px; height: 480px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(99,102,241,0.08) 0%, transparent 70%);
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 50% at 50% 0%,   rgba(99,102,241,0.12) 0%, transparent 70%),
+    radial-gradient(ellipse 60% 40% at 50% 100%,  rgba(99,102,241,0.07) 0%, transparent 70%);
   pointer-events: none;
 }
 
-/* ── Card ─────────────────────────────── */
+/* ── Card ────────────────────────────── */
 .va-card {
   position: relative;
   z-index: 10;
   width: 100%;
-  max-width: 380px;
+  max-width: 390px;
   height: calc(100svh - 32px);
-  max-height: 700px;
-  border-radius: 28px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(15, 17, 32, 0.98);
+  max-height: 760px;
+  border-radius: 32px;
+  border: 1px solid rgba(255,255,255,0.07);
+  background: rgba(12, 14, 28, 0.98);
   box-shadow:
     0 0 0 1px rgba(255,255,255,0.03) inset,
-    0 32px 80px rgba(0,0,0,0.5);
+    0 40px 100px rgba(0,0,0,0.6),
+    0 0 80px rgba(99,102,241,0.06);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: fadeUp 0.5s cubic-bezier(.23,1,.32,1) both;
-  transition: border-color 0.6s;
+  animation: fadeUp 0.45s cubic-bezier(.23,1,.32,1) both;
+  transition: border-color 0.5s, box-shadow 0.5s;
 }
-.va-card.state-listen { border-color: rgba(16,185,129,0.25); }
-.va-card.state-think  { border-color: rgba(139,92,246,0.25); }
-.va-card.state-speak  { border-color: rgba(245,158,11,0.25); }
+.va-card.state-listen { border-color: rgba(16,185,129,0.2); box-shadow: 0 0 0 1px rgba(255,255,255,0.03) inset, 0 40px 100px rgba(0,0,0,0.6), 0 0 80px rgba(16,185,129,0.08); }
+.va-card.state-think  { border-color: rgba(139,92,246,0.2);  box-shadow: 0 0 0 1px rgba(255,255,255,0.03) inset, 0 40px 100px rgba(0,0,0,0.6), 0 0 80px rgba(139,92,246,0.08); }
+.va-card.state-speak  { border-color: rgba(245,158,11,0.22);  box-shadow: 0 0 0 1px rgba(255,255,255,0.03) inset, 0 40px 100px rgba(0,0,0,0.6), 0 0 80px rgba(245,158,11,0.08); }
+
+/* Inner ambient glow that shifts with state */
+.va-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 55%;
+  background: radial-gradient(ellipse 80% 60% at 50% 10%, rgba(99,102,241,0.07) 0%, transparent 70%);
+  pointer-events: none;
+  transition: background 0.6s;
+  z-index: 0;
+}
+.va-card.state-listen::before { background: radial-gradient(ellipse 80% 60% at 50% 10%, rgba(16,185,129,0.09) 0%, transparent 70%); }
+.va-card.state-think::before  { background: radial-gradient(ellipse 80% 60% at 50% 10%, rgba(139,92,246,0.1) 0%, transparent 70%); }
+.va-card.state-speak::before  { background: radial-gradient(ellipse 80% 60% at 50% 10%, rgba(245,158,11,0.08) 0%, transparent 70%); }
+
+.va-card > * { position: relative; z-index: 1; }
 
 /* ── Header ──────────────────────────── */
 .va-header {
@@ -63,18 +79,17 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px 14px;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
+  padding: 18px 22px 14px;
 }
 .va-header-left {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 12px;
 }
 .va-avatar {
-  width: 38px; height: 38px;
+  width: 40px; height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #6366f1, #818cf8);
+  background: linear-gradient(135deg, #4f46e5, #818cf8);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -83,13 +98,13 @@
   font-weight: 700;
   color: #fff;
   flex-shrink: 0;
-  box-shadow: 0 0 0 2px rgba(99,102,241,0.25);
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.2), 0 4px 12px rgba(79,70,229,0.4);
 }
 .va-header-name {
   font-family: var(--font-display);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
-  color: rgba(255,255,255,0.9);
+  color: rgba(255,255,255,0.92);
   letter-spacing: -0.01em;
 }
 .va-header-status {
@@ -97,25 +112,23 @@
   align-items: center;
   gap: 5px;
   font-size: 11px;
-  color: rgba(255,255,255,0.38);
+  color: rgba(255,255,255,0.35);
   margin-top: 1px;
 }
 .va-status-dot {
   width: 6px; height: 6px;
   border-radius: 50%;
   background: #10b981;
-  box-shadow: 0 0 6px #10b981;
-  animation: statusPulse 2.2s ease-in-out infinite;
+  box-shadow: 0 0 6px rgba(16,185,129,0.8);
+  animation: statusPulse 2.5s ease-in-out infinite;
 }
-@keyframes statusPulse {
-  0%,100% { opacity:1; }
-  50%     { opacity:0.45; }
-}
+@keyframes statusPulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
 .va-header-time {
   font-family: var(--font-display);
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
-  color: rgba(255,255,255,0.5);
+  color: rgba(255,255,255,0.4);
   letter-spacing: 0.02em;
   transition: color 0.5s;
 }
@@ -123,22 +136,29 @@
 .state-think  .va-header-time { color: var(--think); }
 .state-speak  .va-header-time { color: var(--speak); }
 
-/* ── Orb section ─────────────────────── */
+/* ── Orb section — GROWS to fill space ── */
 .va-orb-section {
-  flex-shrink: 0;
+  flex: 1;
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 20px 0 10px;
   overflow: hidden;
+  padding: 0;
+  min-height: 0;
 }
+
 .va-orb-outer {
   position: relative;
-  width: 160px; height: 160px;
+  /* fills available height up to a cap */
+  width:  min(72%, 260px);
+  height: min(72%, 260px);
+  /* also respect flex height */
+  aspect-ratio: 1;
   display: flex;
   align-items: center;
   justify-content: center;
 }
+
 .va-atmo {
   position: absolute;
   border-radius: 50%;
@@ -148,33 +168,42 @@
   transition: border-color 0.6s;
 }
 .va-atmo-1 {
-  width: 128%; height: 128%;
-  margin: -64% 0 0 -64%;
-  border-color: rgba(99,102,241,0.12);
+  width: 130%; height: 130%;
+  margin: -65% 0 0 -65%;
+  border-color: rgba(99,102,241,0.14);
   animation: atmoSpin 18s linear infinite;
 }
 .va-atmo-2 {
-  width: 160%; height: 160%;
-  margin: -80% 0 0 -80%;
+  width: 165%; height: 165%;
+  margin: -82.5% 0 0 -82.5%;
   border-color: rgba(99,102,241,0.06);
-  animation: atmoSpin 30s linear infinite reverse;
+  animation: atmoSpin 32s linear infinite reverse;
+}
+.va-atmo-3 {
+  width: 205%; height: 205%;
+  margin: -102.5% 0 0 -102.5%;
+  border-color: rgba(99,102,241,0.03);
+  animation: atmoSpin 50s linear infinite;
 }
 @keyframes atmoSpin { to { transform: rotate(360deg); } }
 
-.va-atmo-1::before {
+.va-atmo-1::before, .va-atmo-2::before {
   content: '';
   position: absolute;
-  width: 6px; height: 6px;
+  width: 7px; height: 7px;
   border-radius: 50%;
-  top: -3px; left: 50%;
-  margin-left: -3px;
-  background: rgba(99,102,241,0.7);
-  box-shadow: 0 0 8px rgba(99,102,241,0.9);
+  top: -3.5px; left: 50%;
+  margin-left: -3.5px;
   transition: background 0.6s, box-shadow 0.6s;
 }
-.state-listen .va-atmo-1::before { background: rgba(16,185,129,0.7); box-shadow: 0 0 8px rgba(16,185,129,0.9); }
-.state-think  .va-atmo-1::before { background: rgba(139,92,246,0.7); box-shadow: 0 0 8px rgba(139,92,246,0.9); }
-.state-speak  .va-atmo-1::before { background: rgba(245,158,11,0.7); box-shadow: 0 0 8px rgba(245,158,11,0.9); }
+.va-atmo-1::before { background: rgba(99,102,241,0.8); box-shadow: 0 0 10px rgba(99,102,241,1); }
+.va-atmo-2::before { background: rgba(99,102,241,0.4); box-shadow: 0 0 8px rgba(99,102,241,0.6); }
+.state-listen .va-atmo-1::before { background: rgba(16,185,129,0.8);  box-shadow: 0 0 10px rgba(16,185,129,1); }
+.state-listen .va-atmo-2::before { background: rgba(16,185,129,0.4);  box-shadow: 0 0 8px rgba(16,185,129,0.6); }
+.state-think  .va-atmo-1::before { background: rgba(139,92,246,0.8);  box-shadow: 0 0 10px rgba(139,92,246,1); }
+.state-think  .va-atmo-2::before { background: rgba(139,92,246,0.4);  box-shadow: 0 0 8px rgba(139,92,246,0.6); }
+.state-speak  .va-atmo-1::before { background: rgba(245,158,11,0.8);  box-shadow: 0 0 10px rgba(245,158,11,1); }
+.state-speak  .va-atmo-2::before { background: rgba(245,158,11,0.4);  box-shadow: 0 0 8px rgba(245,158,11,0.6); }
 
 .va-orb-stage {
   position: relative;
@@ -187,18 +216,19 @@
 /* Glass core */
 .va-glass-core {
   position: absolute;
-  width: 56%; height: 56%;
+  width: 55%; height: 55%;
   border-radius: 50%;
-  background: radial-gradient(circle at 38% 32%,
-    rgba(255,255,255,0.15) 0%,
-    rgba(99,102,241,0.3) 35%,
-    rgba(20,20,60,0.85) 65%,
-    rgba(5,5,20,0.97) 100%
+  background: radial-gradient(circle at 36% 30%,
+    rgba(255,255,255,0.18) 0%,
+    rgba(99,102,241,0.32) 30%,
+    rgba(20,18,60,0.88) 65%,
+    rgba(4,4,18,0.97) 100%
   );
   box-shadow:
-    0 0 0 1px rgba(99,102,241,0.18),
-    0 0 30px rgba(99,102,241,0.3),
-    inset 0 1px 0 rgba(255,255,255,0.18);
+    0 0 0 1px rgba(99,102,241,0.2),
+    0 0 40px rgba(99,102,241,0.35),
+    0 0 80px rgba(99,102,241,0.1),
+    inset 0 1px 0 rgba(255,255,255,0.2);
   overflow: hidden;
   pointer-events: none;
   transition: background 0.6s, box-shadow 0.6s;
@@ -206,52 +236,48 @@
 .va-glass-core::before {
   content: '';
   position: absolute;
-  top: 8%; left: 15%;
-  width: 38%; height: 26%;
-  background: radial-gradient(ellipse, rgba(255,255,255,0.35) 0%, transparent 70%);
+  top: 7%; left: 14%;
+  width: 36%; height: 24%;
+  background: radial-gradient(ellipse, rgba(255,255,255,0.4) 0%, transparent 70%);
   border-radius: 50%;
   filter: blur(4px);
   transform: rotate(-15deg);
 }
 .state-listen .va-glass-core {
-  background: radial-gradient(circle at 38% 32%,rgba(255,255,255,0.15) 0%,rgba(16,185,129,0.35) 35%,rgba(0,50,30,0.85) 65%,rgba(2,10,6,0.97) 100%);
-  box-shadow: 0 0 0 1px rgba(16,185,129,0.2),0 0 32px rgba(16,185,129,0.35),inset 0 1px 0 rgba(255,255,255,0.18);
+  background: radial-gradient(circle at 36% 30%,rgba(255,255,255,0.18) 0%,rgba(16,185,129,0.36) 30%,rgba(0,44,26,0.88) 65%,rgba(2,8,5,0.97) 100%);
+  box-shadow: 0 0 0 1px rgba(16,185,129,0.22),0 0 44px rgba(16,185,129,0.4),0 0 90px rgba(16,185,129,0.12),inset 0 1px 0 rgba(255,255,255,0.2);
 }
 .state-think .va-glass-core {
-  background: radial-gradient(circle at 38% 32%,rgba(255,255,255,0.15) 0%,rgba(139,92,246,0.38) 35%,rgba(35,10,70,0.85) 65%,rgba(8,3,18,0.97) 100%);
-  box-shadow: 0 0 0 1px rgba(139,92,246,0.2),0 0 32px rgba(139,92,246,0.35),inset 0 1px 0 rgba(255,255,255,0.18);
+  background: radial-gradient(circle at 36% 30%,rgba(255,255,255,0.18) 0%,rgba(139,92,246,0.38) 30%,rgba(30,8,68,0.88) 65%,rgba(7,3,16,0.97) 100%);
+  box-shadow: 0 0 0 1px rgba(139,92,246,0.22),0 0 44px rgba(139,92,246,0.4),0 0 90px rgba(139,92,246,0.12),inset 0 1px 0 rgba(255,255,255,0.2);
 }
 .state-speak .va-glass-core {
-  background: radial-gradient(circle at 38% 32%,rgba(255,255,255,0.18) 0%,rgba(245,158,11,0.38) 35%,rgba(60,30,0,0.85) 65%,rgba(15,7,1,0.97) 100%);
-  box-shadow: 0 0 0 1px rgba(245,158,11,0.2),0 0 32px rgba(245,158,11,0.35),inset 0 1px 0 rgba(255,255,255,0.18);
+  background: radial-gradient(circle at 36% 30%,rgba(255,255,255,0.2) 0%,rgba(245,158,11,0.4) 30%,rgba(55,26,0,0.88) 65%,rgba(14,6,1,0.97) 100%);
+  box-shadow: 0 0 0 1px rgba(245,158,11,0.22),0 0 44px rgba(245,158,11,0.4),0 0 90px rgba(245,158,11,0.12),inset 0 1px 0 rgba(255,255,255,0.2);
 }
 
 .va-core-scan {
   position: absolute;
   width: 100%; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.28), transparent);
   animation: scanMove 3.5s ease-in-out infinite;
   top: 50%;
 }
-@keyframes scanMove {
-  0%   { top:10%; opacity:0; }
-  20%  { opacity:1; }
-  80%  { opacity:1; }
-  100% { top:90%; opacity:0; }
-}
+@keyframes scanMove { 0%{top:10%;opacity:0}20%{opacity:1}80%{opacity:1}100%{top:90%;opacity:0} }
+
 .va-core-pulse {
   position: absolute;
   top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  width: 16px; height: 16px;
+  transform: translate(-50%,-50%);
+  width: 18px; height: 18px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(180,180,255,0.6) 50%, transparent 100%);
-  filter: blur(2px);
+  background: radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(200,200,255,0.5) 50%, transparent 100%);
+  filter: blur(2.5px);
   animation: innerPulse 2s ease-in-out infinite;
 }
 @keyframes innerPulse {
-  0%,100% { transform:translate(-50%,-50%) scale(1); opacity:0.7; }
-  50%     { transform:translate(-50%,-50%) scale(1.9); opacity:1; }
+  0%,100%{ transform:translate(-50%,-50%) scale(1); opacity:0.65; }
+  50%    { transform:translate(-50%,-50%) scale(2); opacity:1; }
 }
 
 /* ── Status text ─────────────────────── */
@@ -260,37 +286,33 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
-  padding: 10px 20px 6px;
+  gap: 2px;
+  padding: 8px 20px 4px;
   text-align: center;
 }
 .va-status-label {
   font-size: 11px;
-  color: rgba(255,255,255,0.35);
-  letter-spacing: 0.01em;
+  color: rgba(255,255,255,0.3);
+  letter-spacing: 0;
   transition: color 0.5s;
+  font-family: var(--font-mono);
 }
-.state-listen .va-status-label { color: rgba(16,185,129,0.7); }
-.state-think  .va-status-label { color: rgba(139,92,246,0.7); }
-.state-speak  .va-status-label { color: rgba(245,158,11,0.7); }
+.state-listen .va-status-label { color: rgba(52,211,153,0.75); }
+.state-think  .va-status-label { color: rgba(167,139,250,0.75); }
+.state-speak  .va-status-label { color: rgba(251,191,36,0.75); }
 
 .va-status-main {
   font-family: var(--font-display);
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
   color: #fff;
-  line-height: 1.1;
-  transition: color 0.5s;
+  line-height: 1;
 }
-.state-listen .va-status-main { color: #fff; }
-.state-think  .va-status-main { color: #fff; }
-.state-speak  .va-status-main { color: #fff; }
-
 .va-status-sub {
   font-size: 12px;
-  color: rgba(255,255,255,0.3);
-  letter-spacing: 0;
+  color: rgba(255,255,255,0.28);
+  margin-top: 1px;
 }
 
 /* ── Viz bars ────────────────────────── */
@@ -301,25 +323,25 @@
   justify-content: center;
   gap: 2.5px;
   height: 32px;
-  padding: 0 24px;
-  margin: 6px 0 0;
+  padding: 0 32px;
+  margin: 8px 0 0;
 }
 .va-vbar {
   width: 2.5px;
   border-radius: 10px;
-  background: rgba(99,102,241,0.45);
+  background: rgba(99,102,241,0.4);
   height: 3px;
   transition: background 0.5s;
   animation: vbarIdle 2s ease-in-out infinite paused;
-  animation-delay: calc(var(--i) * 0.06s);
+  animation-delay: calc(var(--i) * 0.055s);
 }
 .state-listen .va-vbar { background: rgba(16,185,129,0.55); }
 .state-think  .va-vbar { background: rgba(139,92,246,0.55); }
 .state-speak  .va-vbar { background: rgba(245,158,11,0.55); }
 .va-viz.active .va-vbar { animation-play-state: running; }
 @keyframes vbarIdle {
-  0%,100% { height:3px; opacity:0.3; }
-  50%     { height:var(--h); opacity:1; }
+  0%,100%{ height:3px; opacity:0.28; }
+  50%    { height:var(--h); opacity:0.95; }
 }
 
 /* ── Controls ────────────────────────── */
@@ -328,67 +350,64 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 18px;
-  padding: 14px 20px 10px;
+  gap: 20px;
+  padding: 14px 20px 12px;
 }
 .va-btn-sm {
-  width: 46px; height: 46px;
+  width: 48px; height: 48px;
   border-radius: 50%;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.09);
   background: rgba(255,255,255,0.04);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255,255,255,0.4);
+  color: rgba(255,255,255,0.38);
   transition: all 0.2s;
 }
-.va-btn-sm:hover {
-  border-color: rgba(255,255,255,0.22);
-  color: rgba(255,255,255,0.75);
-  transform: scale(1.07);
-}
+.va-btn-sm:hover { border-color: rgba(255,255,255,0.2); color: rgba(255,255,255,0.7); transform: scale(1.06); }
 .va-btn-sm:active { transform: scale(0.93); }
 
 .va-btn-main {
-  width: 68px; height: 68px;
+  width: 72px; height: 72px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #6366f1, #818cf8);
+  background: linear-gradient(135deg, #4f46e5, #818cf8);
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
-  box-shadow: 0 4px 24px rgba(99,102,241,0.45), 0 0 0 0 rgba(99,102,241,0.3);
+  box-shadow: 0 6px 28px rgba(79,70,229,0.55), 0 0 0 0 rgba(99,102,241,0);
   transition: all 0.25s;
 }
 .va-btn-main:hover {
-  transform: scale(1.07);
-  box-shadow: 0 6px 32px rgba(99,102,241,0.6), 0 0 0 6px rgba(99,102,241,0.12);
+  transform: scale(1.08);
+  box-shadow: 0 8px 36px rgba(79,70,229,0.7), 0 0 0 8px rgba(99,102,241,0.1);
 }
-.va-btn-main:active { transform: scale(0.94); }
+.va-btn-main:active { transform: scale(0.93); }
 .va-btn-main.running {
-  background: linear-gradient(135deg, #374151, #4b5563);
-  box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: none;
 }
 
-/* State tint on main button */
-.state-listen .va-btn-main:not(.running) { background: linear-gradient(135deg, #059669, #10b981); box-shadow: 0 4px 24px rgba(16,185,129,0.45); }
-.state-think  .va-btn-main:not(.running) { background: linear-gradient(135deg, #7c3aed, #8b5cf6); box-shadow: 0 4px 24px rgba(139,92,246,0.45); }
-.state-speak  .va-btn-main:not(.running) { background: linear-gradient(135deg, #d97706, #f59e0b); box-shadow: 0 4px 24px rgba(245,158,11,0.45); }
+/* State colours on main button */
+.state-listen .va-btn-main:not(.running) { background: linear-gradient(135deg, #059669, #10b981); box-shadow: 0 6px 28px rgba(16,185,129,0.55); }
+.state-think  .va-btn-main:not(.running) { background: linear-gradient(135deg, #6d28d9, #8b5cf6); box-shadow: 0 6px 28px rgba(139,92,246,0.55); }
+.state-speak  .va-btn-main:not(.running) { background: linear-gradient(135deg, #b45309, #f59e0b); box-shadow: 0 6px 28px rgba(245,158,11,0.55); }
 
 /* ── Stats ───────────────────────────── */
 .va-stats {
   flex-shrink: 0;
   display: flex;
-  margin: 8px 14px 14px;
+  margin: 0 16px 18px;
   border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 16px;
+  border-radius: 18px;
   background: rgba(255,255,255,0.025);
   overflow: hidden;
 }
 .va-stat {
   flex: 1;
-  padding: 12px 0;
+  padding: 13px 0;
   text-align: center;
   border-right: 1px solid rgba(255,255,255,0.05);
 }
@@ -397,7 +416,7 @@
   font-family: var(--font-display);
   font-size: 15px;
   font-weight: 600;
-  color: rgba(255,255,255,0.75);
+  color: rgba(255,255,255,0.7);
   letter-spacing: -0.01em;
   transition: color 0.5s;
 }
@@ -405,27 +424,26 @@
 .state-think  .va-sv { color: #a78bfa; }
 .state-speak  .va-sv { color: #fbbf24; }
 .va-sk {
-  font-size: 9px;
-  letter-spacing: 0.04em;
-  color: rgba(255,255,255,0.22);
+  font-size: 8.5px;
+  letter-spacing: 0.06em;
+  color: rgba(255,255,255,0.2);
   text-transform: uppercase;
   margin-top: 3px;
 }
 
-/* ── Tiny screens ────────────────────── */
-@media (max-height: 660px) {
-  .va-orb-outer { width: 130px; height: 130px; }
-  .va-orb-section { padding: 12px 0 6px; }
-  .va-status-main { font-size: 22px; }
-  .va-status-section { padding: 8px 20px 4px; }
-  .va-controls { padding: 10px 20px 8px; }
-  .va-btn-main { width: 58px; height: 58px; }
-  .va-btn-sm   { width: 40px; height: 40px; }
-  .va-stats { margin: 6px 12px 10px; }
+/* ── Short screens ───────────────────── */
+@media (max-height: 680px) {
+  .va-header { padding: 12px 20px 10px; }
+  .va-status-main { font-size: 26px; }
+  .va-controls { padding: 10px 20px 8px; gap: 16px; }
+  .va-btn-main { width: 60px; height: 60px; }
+  .va-btn-sm   { width: 42px; height: 42px; }
+  .va-stats { margin: 0 14px 12px; }
+  .va-viz { height: 26px; }
 }
 
 /* ── Mobile edge-to-edge ─────────────── */
 @media (max-width: 420px) {
-  .va-bg   { padding: 0; }
+  .va-bg   { padding: 0; background: #090b17; }
   .va-card { max-width: 100%; height: 100svh; max-height: none; border-radius: 0; border: none; }
 }

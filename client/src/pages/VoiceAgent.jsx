@@ -183,6 +183,7 @@ export default function VoiceAgent() {
           <div className="va-orb-outer">
             <div className="va-atmo va-atmo-1" />
             <div className="va-atmo va-atmo-2" />
+            <div className="va-atmo va-atmo-3" />
             <div className="va-orb-stage">
               <OrbCanvas examState={examState} />
               <WaveRing  examState={examState} />
