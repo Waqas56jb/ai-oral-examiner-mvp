@@ -69,8 +69,8 @@
 .va-brand-name {
   font-family: var(--font-display);
   font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   color: rgba(255,255,255,0.9);
   text-transform: uppercase;
 }
@@ -232,11 +232,11 @@
 .va-big-status {
   font-family: var(--font-display);
   font-size: 30px;
-  font-weight: 800;
-  letter-spacing: 2px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: #fff;
-  text-shadow: 0 0 28px rgba(0,229,255,0.35);
-  line-height: 1;
+  text-shadow: 0 0 18px rgba(0,229,255,0.22);
+  line-height: 1.05;
   transition: text-shadow 0.7s;
 }
 .state-listen .va-big-status { text-shadow: 0 0 28px rgba(0,255,170,0.5); }

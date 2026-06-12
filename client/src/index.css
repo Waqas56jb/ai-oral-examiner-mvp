@@ -13,7 +13,7 @@
   --text: rgba(255, 255, 255, 0.88);
   --text-dim: rgba(255, 255, 255, 0.35);
   --font-mono: 'DM Mono', monospace;
-  --font-display: 'Syne', sans-serif;
+  --font-display: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
 }
 
 html, body, #root {

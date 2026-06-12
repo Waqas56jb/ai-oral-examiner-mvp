@@ -51,8 +51,8 @@
 .rp-brand-name {
   font-family: var(--font-display);
   font-size: clamp(13px, 3vw, 16px);
-  font-weight: 800;
-  letter-spacing: 5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   color: #fff;
   text-transform: uppercase;
 }
@@ -73,7 +73,7 @@
 .rp-score-num {
   font-family: var(--font-display);
   font-size: clamp(28px, 5vw, 36px);
-  font-weight: 800;
+  font-weight: 700;
   color: var(--c1);
   text-shadow: 0 0 20px rgba(0,229,255,0.5);
   line-height: 1;
@@ -87,7 +87,7 @@
 .rp-score-grade {
   font-family: var(--font-display);
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 2px;
   padding: 3px 8px;
   border-radius: 6px;
@@ -149,7 +149,7 @@
 .rp-section-title {
   font-family: var(--font-display);
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 3.5px;
   color: rgba(255,255,255,0.4);
   text-transform: uppercase;
@@ -284,7 +284,7 @@
   border-radius: 50px;
   font-family: var(--font-display);
   font-size: clamp(9px, 2vw, 11px);
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 2.5px;
   text-transform: uppercase;
   transition: transform 0.2s, box-shadow 0.2s;
