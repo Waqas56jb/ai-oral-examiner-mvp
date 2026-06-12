@@ -1,0 +1,408 @@
+/* ════════════════════════════════════════
+   VOICE AGENT — Compact single-screen card
+   ════════════════════════════════════════ */
+
+.va-bg {
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: var(--bg);
+  position: relative;
+}
+
+/* ── The card — fixed viewport height ── */
+.va-card {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 390px;
+  /* fills available height, no scroll */
+  height: calc(100svh - 32px);
+  max-height: 720px;
+  border-radius: 28px;
+  border: 1px solid rgba(0,229,255,0.15);
+  background: rgba(6, 10, 26, 0.97);
+  backdrop-filter: blur(30px);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.04) inset,
+    0 24px 80px rgba(0,0,0,0.65),
+    0 0 60px rgba(0,98,255,0.09);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: fadeUp 0.5s cubic-bezier(.23,1,.32,1) both;
+}
+
+/* State border glow */
+.va-card.state-listen { border-color: rgba(0,255,170,0.22); }
+.va-card.state-think  { border-color: rgba(191,96,255,0.22); }
+.va-card.state-speak  { border-color: rgba(255,107,53,0.25); }
+
+/* ── Header — fixed height ── */
+.va-card-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.va-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.va-brand-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--c1);
+  box-shadow: 0 0 8px var(--c1);
+  flex-shrink: 0;
+  animation: dotPulse 2s ease-in-out infinite;
+}
+@keyframes dotPulse {
+  0%,100% { opacity:1; transform:scale(1); }
+  50%     { opacity:0.35; transform:scale(0.55); }
+}
+.va-brand-name {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 5px;
+  color: rgba(255,255,255,0.9);
+  text-transform: uppercase;
+}
+.va-brand-tag {
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: rgba(0,229,255,0.35);
+  text-transform: uppercase;
+}
+.va-header-time {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--c1);
+  text-shadow: 0 0 12px rgba(0,229,255,0.4);
+  transition: color 0.7s, text-shadow 0.7s;
+}
+.state-listen .va-header-time { color: #00ffaa; text-shadow: 0 0 12px rgba(0,255,170,0.4); }
+.state-think  .va-header-time { color: #bf60ff; text-shadow: 0 0 12px rgba(191,96,255,0.4); }
+.state-speak  .va-header-time { color: #ff6b35; text-shadow: 0 0 12px rgba(255,107,53,0.4); }
+
+/* ── Orb section — fixed height ── */
+.va-orb-section {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 14px 0 6px;
+  overflow: hidden;
+}
+.va-orb-outer {
+  position: relative;
+  width: 148px;
+  height: 148px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Atmospheric rings — % of orb-outer, clipped by overflow:hidden above */
+.va-atmo {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid;
+  top: 50%; left: 50%;
+  pointer-events: none;
+  transition: border-color 0.8s;
+}
+.va-atmo-1 {
+  width: 128%; height: 128%;
+  margin: -64% 0 0 -64%;
+  border-color: rgba(0,229,255,0.1);
+  animation: atmoSpin 20s linear infinite;
+}
+.va-atmo-2 {
+  width: 162%; height: 162%;
+  margin: -81% 0 0 -81%;
+  border-color: rgba(0,98,255,0.06);
+  animation: atmoSpin 35s linear infinite reverse;
+}
+@keyframes atmoSpin { to { transform: rotate(360deg); } }
+
+.va-atmo-1::before, .va-atmo-2::before {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  top: -3px; left: 50%;
+  margin-left: -3px;
+}
+.va-atmo-1::before { width:6px;height:6px;background:rgba(0,229,255,0.6);box-shadow:0 0 8px rgba(0,229,255,0.8); }
+.va-atmo-2::before { width:5px;height:5px;background:rgba(0,98,255,0.5);box-shadow:0 0 6px rgba(0,98,255,0.7); }
+
+.va-orb-stage {
+  position: relative;
+  width: 100%; height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.va-glass-core {
+  position: absolute;
+  width: 56%; height: 56%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%,
+    rgba(255,255,255,0.16) 0%, rgba(0,130,220,0.32) 30%,
+    rgba(0,30,80,0.80) 65%, rgba(1,5,20,0.95) 100%
+  );
+  box-shadow: 0 0 0 1px rgba(0,229,255,0.14),0 0 28px rgba(0,130,255,0.28),
+    inset 0 1px 0 rgba(255,255,255,0.15),inset 0 0 18px rgba(0,229,255,0.04);
+  overflow: hidden;
+  pointer-events: none;
+  transition: box-shadow 0.8s, background 0.8s;
+}
+.va-glass-core::before {
+  content: '';
+  position: absolute;
+  top:8%;left:15%;width:40%;height:28%;
+  background:radial-gradient(ellipse,rgba(255,255,255,0.38) 0%,transparent 70%);
+  border-radius:50%;filter:blur(5px);transform:rotate(-15deg);
+}
+.va-core-scan {
+  position: absolute;
+  width:100%;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(0,229,255,0.5),transparent);
+  animation:scanMove 3s ease-in-out infinite;top:50%;
+}
+@keyframes scanMove { 0%{top:10%;opacity:0}20%{opacity:1}80%{opacity:1}100%{top:90%;opacity:0} }
+.va-core-pulse {
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:18px;height:18px;border-radius:50%;
+  background:radial-gradient(circle,#fff 0%,rgba(0,229,255,0.85) 50%,transparent 100%);
+  filter:blur(3px);
+  animation:innerPulse 1.8s ease-in-out infinite;
+}
+@keyframes innerPulse {
+  0%,100%{transform:translate(-50%,-50%) scale(1);opacity:0.75;}
+  50%{transform:translate(-50%,-50%) scale(2);opacity:1;}
+}
+.state-listen .va-glass-core { background:radial-gradient(circle at 38% 32%,rgba(255,255,255,0.16) 0%,rgba(0,220,130,0.38) 30%,rgba(0,60,30,0.82) 65%,rgba(1,5,10,0.96) 100%);box-shadow:0 0 0 1px rgba(0,255,170,0.18),0 0 36px rgba(0,255,170,0.4),inset 0 1px 0 rgba(255,255,255,0.15); }
+.state-think  .va-glass-core { background:radial-gradient(circle at 38% 32%,rgba(255,255,255,0.16) 0%,rgba(140,0,255,0.38) 30%,rgba(40,0,80,0.82) 65%,rgba(5,1,20,0.96) 100%);box-shadow:0 0 0 1px rgba(191,96,255,0.18),0 0 36px rgba(191,96,255,0.4),inset 0 1px 0 rgba(255,255,255,0.15); }
+.state-speak  .va-glass-core { background:radial-gradient(circle at 38% 32%,rgba(255,255,255,0.2) 0%,rgba(255,90,0,0.45) 30%,rgba(80,10,0,0.82) 65%,rgba(15,2,1,0.96) 100%);box-shadow:0 0 0 1px rgba(255,107,53,0.18),0 0 36px rgba(255,107,53,0.48),inset 0 1px 0 rgba(255,255,255,0.15); }
+
+/* ── Status — fixed height ── */
+.va-status-section {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 20px 4px;
+}
+.va-state-badge {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.va-state-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  animation: stateDot 1s ease-in-out infinite;
+  transition: background 0.7s, box-shadow 0.7s;
+  flex-shrink: 0;
+}
+@keyframes stateDot { 0%,100%{opacity:1}50%{opacity:0.2} }
+.va-state-label {
+  font-size: 9px;
+  letter-spacing: 3px;
+  color: rgba(0,229,255,0.45);
+  text-transform: uppercase;
+  transition: color 0.7s;
+}
+.state-listen .va-state-label { color: rgba(0,255,170,0.6); }
+.state-think  .va-state-label { color: rgba(191,96,255,0.6); }
+.state-speak  .va-state-label { color: rgba(255,130,50,0.6); }
+.va-big-status {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #fff;
+  text-shadow: 0 0 28px rgba(0,229,255,0.35);
+  line-height: 1;
+  transition: text-shadow 0.7s;
+}
+.state-listen .va-big-status { text-shadow: 0 0 28px rgba(0,255,170,0.5); }
+.state-think  .va-big-status { text-shadow: 0 0 28px rgba(191,96,255,0.5); }
+.state-speak  .va-big-status { text-shadow: 0 0 28px rgba(255,130,50,0.5); }
+
+/* ── Viz bars — fixed height ── */
+.va-viz {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  height: 30px;
+  padding: 0 20px;
+  margin: 6px 0 0;
+}
+.va-vbar {
+  width: 2.5px;
+  border-radius: 2px;
+  background: var(--c1);
+  opacity: 0.55;
+  height: 3px;
+  transition: background 0.7s;
+  animation: vbarIdle 2s ease-in-out infinite paused;
+  animation-delay: calc(var(--i) * 0.06s);
+}
+.state-listen .va-vbar { background: #00ffaa; }
+.state-think  .va-vbar { background: #bf60ff; }
+.state-speak  .va-vbar { background: #ff6b35; }
+.va-viz.active .va-vbar { animation-play-state: running; }
+@keyframes vbarIdle {
+  0%,100% { height:3px; opacity:0.3; }
+  50%     { height:var(--h); opacity:0.85; }
+}
+
+/* ── Transcript box — grows to fill remaining space ── */
+.va-transcript {
+  flex: 1;
+  margin: 8px 14px 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.025);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  overflow: hidden;
+  transition: border-color 0.7s;
+  min-height: 0;
+}
+.state-listen .va-transcript { border-color: rgba(0,255,170,0.12); }
+.state-speak  .va-transcript { border-color: rgba(255,107,53,0.12); }
+.va-transcript-role {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: rgba(0,229,255,0.4);
+  flex-shrink: 0;
+  transition: color 0.7s;
+}
+.state-listen .va-transcript-role { color: rgba(0,255,170,0.55); }
+.state-speak  .va-transcript-role { color: rgba(255,107,53,0.55); }
+.va-transcript-text {
+  font-size: 12px;
+  line-height: 1.65;
+  color: rgba(255,255,255,0.6);
+  word-break: break-word;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+}
+
+/* ── Controls — fixed height ── */
+.va-controls {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 12px 20px 8px;
+}
+.va-btn-sm {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,229,255,0.18);
+  background: rgba(0,229,255,0.04);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(0,229,255,0.65);
+  transition: all 0.2s;
+}
+.va-btn-sm:hover { border-color: rgba(0,229,255,0.45); transform: scale(1.08); }
+.va-btn-sm:active { transform: scale(0.93); }
+.va-btn-main {
+  width: 62px; height: 62px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,229,255,0.32);
+  background: rgba(0,229,255,0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--c1);
+  box-shadow: 0 0 0 6px rgba(0,229,255,0.04), 0 0 22px rgba(0,229,255,0.12);
+  transition: all 0.2s;
+}
+.va-btn-main:hover { box-shadow:0 0 0 10px rgba(0,229,255,0.06),0 0 32px rgba(0,229,255,0.22); transform:scale(1.06); }
+.va-btn-main:active { transform:scale(0.94); }
+.state-listen .va-btn-main { border-color:rgba(0,255,170,0.35);color:#00ffaa;box-shadow:0 0 0 6px rgba(0,255,170,0.05),0 0 22px rgba(0,255,170,0.15); }
+.state-think  .va-btn-main { border-color:rgba(191,96,255,0.35);color:#bf60ff;box-shadow:0 0 0 6px rgba(191,96,255,0.05),0 0 22px rgba(191,96,255,0.15); }
+.state-speak  .va-btn-main { border-color:rgba(255,107,53,0.35);color:#ff6b35;box-shadow:0 0 0 6px rgba(255,107,53,0.05),0 0 22px rgba(255,107,53,0.15); }
+
+/* ── Stats — fixed height, always at bottom ── */
+.va-stats {
+  flex-shrink: 0;
+  display: flex;
+  border-top: 1px solid rgba(255,255,255,0.05);
+}
+.va-stat {
+  flex: 1;
+  padding: 10px 0 12px;
+  text-align: center;
+  border-right: 1px solid rgba(255,255,255,0.05);
+}
+.va-stat:last-child { border-right: none; }
+.va-sv {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--c1);
+  text-shadow: 0 0 10px rgba(0,229,255,0.35);
+  letter-spacing: 0.5px;
+  transition: color 0.7s, text-shadow 0.7s;
+}
+.state-listen .va-sv { color:#00ffaa;text-shadow:0 0 10px rgba(0,255,170,0.4); }
+.state-think  .va-sv { color:#bf60ff;text-shadow:0 0 10px rgba(191,96,255,0.4); }
+.state-speak  .va-sv { color:#ff6b35;text-shadow:0 0 10px rgba(255,107,53,0.4); }
+.va-sk {
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: rgba(255,255,255,0.2);
+  text-transform: uppercase;
+  margin-top: 3px;
+}
+
+/* ── Tiny screens (iPhone SE etc.) ── */
+@media (max-height: 680px) {
+  .va-orb-outer { width: 120px; height: 120px; }
+  .va-big-status { font-size: 24px; }
+  .va-orb-section { padding: 10px 0 4px; }
+  .va-status-section { padding: 6px 20px 2px; }
+  .va-controls { padding: 10px 20px 6px; }
+  .va-btn-main { width: 54px; height: 54px; }
+  .va-btn-sm   { width: 38px; height: 38px; }
+}
+
+/* ── Mobile edge-to-edge ── */
+@media (max-width: 420px) {
+  .va-bg { padding: 0; }
+  .va-card {
+    max-width: 100%;
+    height: 100svh;
+    max-height: none;
+    border-radius: 0;
+  }
+}
