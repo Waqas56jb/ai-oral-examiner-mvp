@@ -1,10 +1,10 @@
 import { useRef, useEffect } from 'react'
 
 const COLORS = {
-  idle:   ['rgba(0,100,255,',  'rgba(0,229,255,',  'rgba(0,50,150,'],
-  listen: ['rgba(0,200,100,',  'rgba(0,255,170,',  'rgba(0,100,50,'],
-  think:  ['rgba(120,0,220,',  'rgba(191,96,255,', 'rgba(60,0,120,'],
-  speak:  ['rgba(220,80,0,',   'rgba(255,130,50,', 'rgba(200,0,100,'],
+  idle:   ['rgba(80,80,200,',   'rgba(130,130,255,', 'rgba(40,40,120,'],
+  listen: ['rgba(5,150,100,',   'rgba(20,210,140,',  'rgba(0,80,50,'],
+  think:  ['rgba(100,50,220,',  'rgba(160,110,255,', 'rgba(50,20,110,'],
+  speak:  ['rgba(200,120,0,',   'rgba(250,170,30,',  'rgba(160,60,0,'],
 }
 
 const WAVE_TARGET = { idle: 0.05, listen: 0.9, think: 0.35, speak: 0.95 }

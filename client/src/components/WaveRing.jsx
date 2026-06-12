@@ -1,10 +1,10 @@
 import { useRef, useEffect } from 'react'
 
 const STROKE = {
-  idle:   ['rgba(0,229,255,0.35)',   'rgba(0,229,255,0.12)'],
-  listen: ['rgba(0,255,170,0.4)',    'rgba(0,255,170,0.12)'],
-  think:  ['rgba(191,96,255,0.4)',   'rgba(191,96,255,0.12)'],
-  speak:  ['rgba(255,130,50,0.45)',  'rgba(255,130,50,0.12)'],
+  idle:   ['rgba(130,130,255,0.3)',  'rgba(130,130,255,0.1)'],
+  listen: ['rgba(20,210,140,0.35)',  'rgba(20,210,140,0.1)'],
+  think:  ['rgba(160,110,255,0.35)', 'rgba(160,110,255,0.1)'],
+  speak:  ['rgba(250,170,30,0.38)',  'rgba(250,170,30,0.1)'],
 }
 
 const AMP_TARGET = { idle: 0, listen: 1, think: 0.3, speak: 1 }
