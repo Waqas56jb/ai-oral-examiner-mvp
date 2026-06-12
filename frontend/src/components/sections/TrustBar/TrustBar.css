@@ -1,0 +1,52 @@
+.trustbar {
+  padding: 48px 0 56px;
+  background: #fff;
+  border-bottom: 1px solid var(--c-line);
+  overflow: hidden;
+}
+
+.trustbar__label {
+  text-align: center;
+  color: var(--c-muted);
+  font-size: 0.95rem;
+  font-weight: 500;
+  margin-bottom: 30px;
+}
+
+.trustbar__marquee {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+
+.trustbar__track {
+  display: flex;
+  align-items: center;
+  gap: 64px;
+  width: max-content;
+  animation: marquee 28s linear infinite;
+}
+.trustbar__marquee:hover .trustbar__track {
+  animation-play-state: paused;
+}
+
+.trustbar__item {
+  font-family: var(--font-head);
+  font-weight: 800;
+  font-size: 1.6rem;
+  letter-spacing: -0.01em;
+  color: #9fb0c8;
+  white-space: nowrap;
+  transition: color var(--t-base) var(--ease);
+  cursor: default;
+}
+.trustbar__item:hover {
+  color: var(--c-primary);
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
