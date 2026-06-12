@@ -1,0 +1,146 @@
+.benefits__inner {
+  display: grid;
+  grid-template-columns: 0.95fr 1.05fr;
+  gap: 64px;
+  align-items: center;
+}
+
+/* Visual */
+.benefits__visual {
+  position: relative;
+}
+.benefits__img-wrap {
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  box-shadow: var(--sh-lg);
+  aspect-ratio: 1 / 1;
+  position: relative;
+  z-index: 2;
+}
+.benefits__img-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.benefits__float {
+  position: absolute;
+  bottom: 26px;
+  right: -24px;
+  z-index: 3;
+  background: #fff;
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-lg);
+  padding: 16px 20px;
+  width: 230px;
+  animation: float-soft 5s ease-in-out infinite;
+}
+.benefits__float-bar {
+  height: 8px;
+  border-radius: var(--r-full);
+  background: var(--c-bg-softer);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.benefits__float-bar span {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-full);
+  background: var(--grad-brand);
+}
+.benefits__float-text strong {
+  display: block;
+  font-size: 0.92rem;
+  color: var(--c-ink);
+}
+.benefits__float-text small {
+  color: var(--c-accent);
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.benefits__dots {
+  position: absolute;
+  top: -26px;
+  left: -26px;
+  width: 130px;
+  height: 130px;
+  background-image: radial-gradient(var(--c-primary) 1.6px, transparent 1.6px);
+  background-size: 16px 16px;
+  opacity: 0.22;
+  z-index: 1;
+}
+
+/* Copy */
+.benefits__title {
+  font-size: clamp(1.8rem, 3.6vw, 2.6rem);
+  margin: 18px 0 18px;
+  line-height: 1.18;
+}
+.benefits__lead {
+  color: var(--c-muted);
+  font-size: 1.08rem;
+  line-height: 1.75;
+  margin-bottom: 34px;
+}
+
+.benefits__list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 26px 28px;
+}
+.benefit-item {
+  display: flex;
+  gap: 14px;
+}
+.benefit-item__icon {
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid var(--c-line);
+  color: var(--c-primary);
+  font-size: 1.25rem;
+  box-shadow: var(--sh-sm);
+  transition:
+    background var(--t-base) var(--ease),
+    color var(--t-base) var(--ease),
+    transform var(--t-base) var(--ease);
+}
+.benefit-item:hover .benefit-item__icon {
+  background: var(--grad-brand);
+  color: #fff;
+  transform: translateY(-3px);
+}
+.benefit-item h3 {
+  font-size: 1.05rem;
+  margin-bottom: 6px;
+}
+.benefit-item p {
+  color: var(--c-muted);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+@media (max-width: 920px) {
+  .benefits__inner {
+    grid-template-columns: 1fr;
+    gap: 56px;
+  }
+  .benefits__visual {
+    max-width: 440px;
+    margin: 0 auto;
+    width: 100%;
+  }
+}
+@media (max-width: 520px) {
+  .benefits__list {
+    grid-template-columns: 1fr;
+  }
+  .benefits__float {
+    right: 10px;
+  }
+}
