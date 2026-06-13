@@ -1,0 +1,143 @@
+/* ===========================================================
+   Voice-agent widget preview — animated 3D-style themed orb
+   =========================================================== */
+.wp {
+  position: relative;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--c2) 22%, transparent), transparent 60%),
+    var(--wp-bg);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  box-shadow: inset 0 0 50px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  isolation: isolate;
+}
+
+/* Glow halo */
+.wp__halo {
+  position: absolute;
+  width: 78%;
+  height: 78%;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--c1) 55%, transparent), transparent 65%);
+  filter: blur(14px);
+  animation: wpHalo 4s ease-in-out infinite;
+}
+
+/* Rotating conic ring (3D depth) */
+.wp__ring {
+  position: absolute;
+  width: 62%;
+  height: 62%;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, var(--c1), var(--c2), var(--c3), var(--c1));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+  animation: wpSpin 6s linear infinite;
+  opacity: 0.9;
+}
+.wp__ring--2 {
+  width: 80%;
+  height: 80%;
+  opacity: 0.35;
+  animation-duration: 11s;
+  animation-direction: reverse;
+}
+
+/* Central sphere */
+.wp__orb {
+  position: relative;
+  width: 42%;
+  height: 42%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 28%, #fff 0%, color-mix(in srgb, var(--c1) 70%, #fff) 14%, var(--c1) 38%, var(--c2) 72%, color-mix(in srgb, var(--c2) 40%, #000) 100%);
+  box-shadow:
+    0 0 22px color-mix(in srgb, var(--c1) 70%, transparent),
+    0 0 46px color-mix(in srgb, var(--c3) 50%, transparent),
+    inset -4px -6px 14px rgba(0, 0, 0, 0.45);
+  animation: wpBreath 3.4s ease-in-out infinite;
+}
+.wp__orb-core {
+  position: absolute;
+  inset: 22%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, rgba(255, 255, 255, 0.9), transparent 60%);
+  opacity: 0.7;
+}
+.wp__orb-scan {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: linear-gradient(180deg, transparent 0%, rgba(255, 255, 255, 0.35) 50%, transparent 100%);
+  mix-blend-mode: overlay;
+  animation: wpScan 2.6s ease-in-out infinite;
+}
+
+/* Waveform */
+.wp__wave {
+  position: absolute;
+  bottom: 14%;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 16%;
+}
+.wp__wave span {
+  width: 3px;
+  height: 18%;
+  border-radius: 3px;
+  background: linear-gradient(var(--c1), var(--c3));
+  opacity: 0.85;
+}
+.wp__wave.is-on span { animation: wpEq 0.9s ease-in-out infinite; }
+
+/* ---- Keyframes ---- */
+@keyframes wpSpin { to { transform: rotate(360deg); } }
+@keyframes wpHalo { 0%, 100% { transform: scale(0.92); opacity: 0.7; } 50% { transform: scale(1.08); opacity: 1; } }
+@keyframes wpBreath { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+@keyframes wpScan { 0%, 100% { transform: translateY(-30%); opacity: 0; } 50% { transform: translateY(30%); opacity: 1; } }
+@keyframes wpEq { 0%, 100% { height: 18%; } 50% { height: 95%; } }
+
+/* ---- Per-theme animation flavour ---- */
+.wp--pulse .wp__orb { animation-duration: 2.2s; }
+.wp--pulse .wp__halo { animation-duration: 2.4s; }
+
+.wp--flow .wp__halo { animation: wpFlow 6s ease-in-out infinite; }
+@keyframes wpFlow { 0%, 100% { transform: translate(-8%, 4%) scale(1); } 50% { transform: translate(8%, -4%) scale(1.12); } }
+
+.wp--plasma .wp__orb { animation: wpBreath 2s ease-in-out infinite, wpHue 5s linear infinite; }
+.wp--holo { filter: saturate(1.2); }
+.wp--holo .wp__ring { animation: wpSpin 6s linear infinite, wpHue 4s linear infinite; }
+.wp--holo .wp__orb { animation: wpBreath 3.4s ease-in-out infinite, wpHue 4s linear infinite; }
+@keyframes wpHue { to { filter: hue-rotate(360deg); } }
+
+.wp--shimmer .wp__orb::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: linear-gradient(120deg, transparent 35%, rgba(255, 255, 255, 0.55) 50%, transparent 65%);
+  animation: wpSheen 2.4s ease-in-out infinite;
+}
+@keyframes wpSheen { 0% { transform: translateX(-60%) rotate(0); } 100% { transform: translateX(60%) rotate(0); } }
+
+.wp--orbit::after {
+  content: '';
+  position: absolute;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--c1);
+  box-shadow: 0 0 10px var(--c1);
+  top: 50%; left: 50%;
+  transform-origin: 0 0;
+  animation: wpOrbit 3.6s linear infinite;
+}
+@keyframes wpOrbit { from { transform: rotate(0) translateX(34px); } to { transform: rotate(360deg) translateX(34px); } }
+
+.wp--wave .wp__wave span { height: 30%; }
+.wp--wave .wp__orb { animation-duration: 4s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .wp * { animation: none !important; }
+}
