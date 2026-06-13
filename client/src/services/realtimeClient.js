@@ -57,10 +57,18 @@ export async function startRealtimeExam({ candidateName = '', examType = 'RACGP'
     audioEl.srcObject = e.streams[0]
   }
 
-  // Microphone capture
+  // Microphone capture — echo cancellation stops the agent from hearing its own
+  // voice through the speakers (the #1 cause of it interrupting itself).
   let micStream
   try {
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        channelCount: 1,
+      },
+    })
   } catch {
     pc.close()
     throw new Error('Microphone access was blocked. Please allow the mic and try again.')
@@ -72,6 +80,7 @@ export async function startRealtimeExam({ candidateName = '', examType = 'RACGP'
     examinerBuf: '',
     thinkAt: 0,
     awaitingFirstAudio: false,
+    assistantActive: false, // true while the examiner is thinking/speaking
   }
 
   // 3) Data channel for realtime events
@@ -169,24 +178,30 @@ export async function startRealtimeExam({ candidateName = '', examType = 'RACGP'
 function handleEvent(msg, h, state) {
   const type = msg.type || ''
 
-  // Turn-taking / state
+  // Turn-taking / state.
+  // While the examiner is speaking/thinking we IGNORE input VAD events so that
+  // stray noise or speaker echo can't flip the UI to "listening" or break flow.
   if (type === 'input_audio_buffer.speech_started') {
-    h.onState('listen')
+    if (!state.assistantActive) h.onState('listen')
     return
   }
   if (type === 'input_audio_buffer.speech_stopped') {
-    state.thinkAt = performance.now()
-    state.awaitingFirstAudio = true
-    h.onState('think')
+    if (!state.assistantActive) {
+      state.thinkAt = performance.now()
+      state.awaitingFirstAudio = true
+      h.onState('think')
+    }
     return
   }
   if (type === 'response.created') {
+    state.assistantActive = true
     h.onState('think')
     return
   }
 
   // Examiner spoken transcript (assistant)
   if (type.endsWith('audio_transcript.delta')) {
+    state.assistantActive = true
     state.examinerBuf += msg.delta || ''
     h.onState('speak')
     h.onExaminerDelta(state.examinerBuf)
@@ -201,6 +216,7 @@ function handleEvent(msg, h, state) {
 
   // First chunk of examiner audio → measure latency, switch to speaking
   if (type === 'response.audio.delta' || type === 'response.output_audio.delta') {
+    state.assistantActive = true
     if (state.awaitingFirstAudio && state.thinkAt) {
       h.onLatency(Math.round(performance.now() - state.thinkAt))
       state.awaitingFirstAudio = false
@@ -216,8 +232,9 @@ function handleEvent(msg, h, state) {
     return
   }
 
-  // Response finished → back to listening
+  // Response finished → it's now genuinely the candidate's turn
   if (type === 'response.done') {
+    state.assistantActive = false
     h.onState('listen')
     return
   }

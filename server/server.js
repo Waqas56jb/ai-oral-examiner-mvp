@@ -74,12 +74,14 @@ app.post('/api/realtime/session', async (req, res) => {
               // Filter out background noise before it reaches the model.
               noise_reduction: { type: 'near_field' },
               // Semantic VAD waits for a natural end-of-turn instead of
-              // reacting to every blip of background sound.
+              // reacting to every blip of background sound. interrupt_response is
+              // OFF so the examiner always finishes its question before listening
+              // (residual echo/noise can't cut it off mid-sentence).
               turn_detection: {
                 type: 'semantic_vad',
                 eagerness: 'low',
                 create_response: true,
-                interrupt_response: true,
+                interrupt_response: false,
               },
             },
             output: { voice: config.voice, speed: 1.0 },
