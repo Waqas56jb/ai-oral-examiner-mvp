@@ -9,7 +9,8 @@
     "dev": "node --watch server.js",
     "verify:db": "node db/checkConnection.mjs",
     "verify:jotform": "node integrations/verifyJotform.mjs",
-    "seed": "node db/seed.mjs"
+    "seed": "node db/seed.mjs",
+    "create:admin": "node db/createAdmin.mjs"
   },
   "engines": {
     "node": ">=18"

@@ -6,7 +6,8 @@ import OpenAI from 'openai'
 import { config, getApiKey } from './config.js'
 import { buildExaminerInstructions, buildFeedbackUserPrompt, normalizeQuestion, SAMPLE_CASE } from './prompts/examiner.js'
 import { getRandomQuestion, getQuestionById, saveSession } from './db/repo.js'
-import { parseClinicalCase, jotformReady } from './integrations/jotform.js'
+import { parseClinicalCase, jotformReady, listForms } from './integrations/jotform.js'
+import { supabase } from './db/supabase.js'
 
 /**
  * Resolve the case to examine on, from any source:
@@ -322,6 +323,131 @@ function str(v) {
 function arr(v) {
   return Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x.trim()) : []
 }
+
+/* ------------------------------------------------------------------ */
+/*  ADMIN — protected endpoints (Supabase JWT + admin_users check)      */
+/* ------------------------------------------------------------------ */
+async function requireAdmin(req, res, next) {
+  try {
+    if (!supabase) return res.status(500).json({ error: 'Supabase not configured' })
+    const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '')
+    if (!token) return res.status(401).json({ error: 'Unauthorized' })
+    const { data, error } = await supabase.auth.getUser(token)
+    if (error || !data?.user) return res.status(401).json({ error: 'Invalid session' })
+    const { data: adminRow } = await supabase.from('admin_users').select('id').eq('id', data.user.id).maybeSingle()
+    if (!adminRow) return res.status(403).json({ error: 'Not an administrator' })
+    req.adminUser = data.user
+    next()
+  } catch {
+    res.status(500).json({ error: 'Auth check failed' })
+  }
+}
+
+// List Jotform clinical case forms available to import
+app.get('/api/admin/jotform/forms', requireAdmin, async (_req, res) => {
+  try {
+    const forms = await listForms({ limit: 200 })
+    const cases = forms.filter((f) => /case\s*[a-z]?\d/i.test(f.title))
+    res.json({ forms: cases })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Import selected forms (or all case forms) into the question bank
+app.post('/api/admin/jotform/import', requireAdmin, async (req, res) => {
+  try {
+    let ids = Array.isArray(req.body?.formIds) ? req.body.formIds.map(String) : []
+    if (!ids.length) {
+      const forms = await listForms({ limit: 200 })
+      ids = forms.filter((f) => /case\s*[a-z]?\d/i.test(f.title)).map((f) => String(f.id)).slice(0, 25)
+    }
+    let imported = 0
+    let updated = 0
+    let failed = 0
+    for (const id of ids) {
+      try {
+        const c = await parseClinicalCase(id)
+        if (!c.scenario) {
+          failed++
+          continue
+        }
+        const row = {
+          exam_type: deriveExamType(c.category, c.title),
+          external_ref: String(id),
+          title: c.title,
+          stem: c.scenario,
+          marking_criteria: c.questions,
+          is_active: true,
+        }
+        const existing = await supabase.from('exam_questions').select('id').eq('external_ref', String(id)).maybeSingle()
+        if (existing.data?.id) {
+          await supabase.from('exam_questions').update(row).eq('id', existing.data.id)
+          await supabase.from('exam_questions').update({ model_answer: c.modelAnswers.join('\n\n') }).eq('id', existing.data.id)
+          updated++
+        } else {
+          const ins = await supabase.from('exam_questions').insert(row).select('id').single()
+          if (ins.error) {
+            failed++
+          } else {
+            await supabase.from('exam_questions').update({ model_answer: c.modelAnswers.join('\n\n') }).eq('id', ins.data.id)
+            imported++
+          }
+        }
+      } catch {
+        failed++
+      }
+    }
+    res.json({ imported, updated, failed, total: ids.length })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+function deriveExamType(category, title) {
+  const s = `${category || ''} ${title || ''}`.toUpperCase()
+  for (const t of ['RACGP', 'ACRRM', 'AMC', 'PESCI', 'NZREX', 'KFP', 'AKT']) {
+    if (s.includes(t)) return t
+  }
+  return category ? category.split(';')[0].trim() : 'RACGP'
+}
+
+/* ------------------------------------------------------------------ */
+/*  ADMIN — self-service password reset (no email link)                */
+/*  Step 1: check the email belongs to an admin                        */
+/*  Step 2: set a new password directly (service role)                 */
+/* ------------------------------------------------------------------ */
+async function findAdminByEmail(email) {
+  if (!supabase || !email) return null
+  const { data } = await supabase.from('admin_users').select('id, email').ilike('email', email.trim()).maybeSingle()
+  return data || null
+}
+
+app.post('/api/admin/auth/check-email', async (req, res) => {
+  try {
+    const admin = await findAdminByEmail(req.body?.email)
+    res.json({ exists: Boolean(admin) })
+  } catch {
+    res.json({ exists: false })
+  }
+})
+
+app.post('/api/admin/auth/reset-password', async (req, res) => {
+  try {
+    const { email, password } = req.body || {}
+    if (!email || !password) return res.status(400).json({ error: 'Email and password are required' })
+    if (String(password).length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' })
+
+    const admin = await findAdminByEmail(email)
+    if (!admin) return res.status(404).json({ error: 'No administrator account found for that email' })
+
+    const { error } = await supabase.auth.admin.updateUserById(admin.id, { password })
+    if (error) return res.status(500).json({ error: error.message })
+    res.json({ ok: true })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
 
 /* ------------------------------------------------------------------ */
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }))
