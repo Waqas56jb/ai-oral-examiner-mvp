@@ -6,6 +6,22 @@
   const ACCENT_DARK = '#4f46e5';
   const FONT_URL    = 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&display=swap';
 
+  /* ── Which clinical case? ──────────────
+     Set per Kajabi lesson via the embed, e.g.:
+       <script src=".../widget.js" data-form-id="251572174898975"></script>
+     or  window.PASSGP_FORM_ID = '251572174898975';  before the script.
+  */
+  const SCRIPT_EL =
+    document.currentScript ||
+    Array.prototype.slice.call(document.querySelectorAll('script')).filter(function (s) {
+      return s.src && s.src.indexOf('widget.js') !== -1;
+    }).pop();
+  const FORM_ID =
+    (SCRIPT_EL && SCRIPT_EL.getAttribute('data-form-id')) || window.PASSGP_FORM_ID || '';
+  const EXAM_URL = FORM_ID
+    ? WIDGET_URL + '/exam?formId=' + encodeURIComponent(FORM_ID)
+    : WIDGET_URL;
+
   /* ── Inject Google Font ─────────────── */
   if (!document.querySelector('[data-pgp-font]')) {
     const link = document.createElement('link');
@@ -309,7 +325,7 @@
         </button>
       </div>
     </div>
-    <iframe id="pgp-iframe" src="${WIDGET_URL}" title="PassGP AI Oral Examiner" allow="microphone; camera" loading="lazy"></iframe>
+    <iframe id="pgp-iframe" src="${EXAM_URL}" title="PassGP AI Oral Examiner" allow="microphone; camera" loading="lazy"></iframe>
     <div id="pgp-footer">
       Powered by <a href="https://passgp.com" target="_blank" rel="noopener">PassGP</a> &nbsp;·&nbsp; AI Oral Examiner
     </div>
@@ -366,7 +382,7 @@
   document.getElementById('pgp-close-btn').addEventListener('click', closePanel);
 
   document.getElementById('pgp-expand-btn').addEventListener('click', () => {
-    window.open(WIDGET_URL, '_blank', 'noopener');
+    window.open(EXAM_URL, '_blank', 'noopener');
   });
 
   document.getElementById('pgp-tooltip-close').addEventListener('click', (e) => {

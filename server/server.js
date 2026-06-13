@@ -6,6 +6,25 @@ import OpenAI from 'openai'
 import { config, getApiKey } from './config.js'
 import { buildExaminerInstructions, buildFeedbackUserPrompt, normalizeQuestion, SAMPLE_CASE } from './prompts/examiner.js'
 import { getRandomQuestion, getQuestionById, saveSession } from './db/repo.js'
+import { parseClinicalCase, jotformReady } from './integrations/jotform.js'
+
+/**
+ * Resolve the case to examine on, from any source:
+ *  - formId   -> live Jotform clinical case  (preferred when provided)
+ *  - questionId -> a specific DB question
+ *  - else     -> a random DB question for the exam type (fallback: sample case)
+ */
+async function resolveCase({ formId, questionId, examType }) {
+  if (formId && jotformReady()) {
+    try {
+      return await parseClinicalCase(formId)
+    } catch (err) {
+      console.error('Jotform case fetch failed, falling back:', err.message)
+    }
+  }
+  if (questionId) return getQuestionById(questionId)
+  return getRandomQuestion(examType)
+}
 
 const apiKey = getApiKey()
 const openai = new OpenAI({ apiKey })
@@ -42,19 +61,17 @@ app.get('/api/health', (_req, res) => {
 /* ------------------------------------------------------------------ */
 app.post('/api/realtime/session', async (req, res) => {
   try {
-    const { candidateName, examType = 'RACGP', questionId } = req.body || {}
+    const { candidateName, examType = 'RACGP', questionId, formId } = req.body || {}
 
-    // Pull a case from the admin-managed question bank (fallback: sample case).
-    const dbQuestion = questionId
-      ? await getQuestionById(questionId)
-      : await getRandomQuestion(examType)
-    const question = normalizeQuestion(dbQuestion)
+    // Pull the case (Jotform formId > DB questionId > random DB > sample).
+    const rawCase = await resolveCase({ formId, questionId, examType })
+    const question = normalizeQuestion(rawCase)
 
     const instructions = buildExaminerInstructions({
-      examType,
+      examType: question.examType,
       candidateName,
       forVoice: true,
-      question,
+      question: rawCase,
     })
 
     const response = await fetch(config.realtimeClientSecretsUrl, {
@@ -105,9 +122,10 @@ app.post('/api/realtime/session', async (req, res) => {
       model: data.session?.model || config.realtimeModel,
       webrtcUrl: config.realtimeCallsUrl,
       expires_at: data.expires_at,
-      questionId: question.id || null,
+      questionId: question.source === 'db' ? question.id : null,
+      formId: formId || null,
       questionTitle: question.title || null,
-      examType,
+      examType: question.examType,
     })
   } catch (err) {
     console.error('Realtime session exception:', err)
@@ -177,13 +195,13 @@ app.post('/api/chat', async (req, res) => {
 /*  Body: { transcript: [{ role, text }], examType? }                   */
 /* ------------------------------------------------------------------ */
 app.post('/api/feedback', async (req, res) => {
-  const { transcript = [], examType = 'RACGP', questionId, durationSec = 0, save = true } = req.body || {}
+  const { transcript = [], examType = 'RACGP', questionId, formId, durationSec = 0, save = true } = req.body || {}
 
   try {
-    const dbQuestion = questionId ? await getQuestionById(questionId) : null
-    const question = normalizeQuestion(dbQuestion)
+    const rawCase = await resolveCase({ formId, questionId, examType })
+    const question = normalizeQuestion(rawCase)
 
-    const systemPrompt = buildExaminerInstructions({ examType, forVoice: false, question })
+    const systemPrompt = buildExaminerInstructions({ examType, forVoice: false, question: rawCase })
     const userPrompt = buildFeedbackUserPrompt(transcript)
 
     const completion = await openai.chat.completions.create({

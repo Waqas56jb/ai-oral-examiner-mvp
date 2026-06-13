@@ -25,9 +25,21 @@ const STATE_META = {
 const orbStateFor = (s) =>
   s === 'connecting' || s === 'finishing' ? 'think' : s === 'error' ? 'idle' : s
 
+// Read ?formId=... (and optional ?exam=...) so a Kajabi/Jotform embed can tell
+// the examiner exactly which clinical case to run.
+function readParams() {
+  try {
+    const p = new URLSearchParams(window.location.search)
+    return { formId: p.get('formId') || p.get('form') || null, exam: p.get('exam') || EXAM_TYPE }
+  } catch {
+    return { formId: null, exam: EXAM_TYPE }
+  }
+}
+
 export default function VoiceAgent() {
   const navigate = useNavigate()
   const { setSessionData } = useExam()
+  const params = useRef(readParams()).current
 
   const [examState, setExamState] = useState('idle')
   const [running,   setRunning]   = useState(false)
@@ -76,7 +88,8 @@ export default function VoiceAgent() {
 
     try {
       const session = await startRealtimeExam({
-        examType: EXAM_TYPE,
+        examType: params.exam,
+        formId: params.formId,
         handlers: {
           onState: (s) => setExamState(s),
           onLatency: (ms) => setLatency(ms + 'ms'),
@@ -96,7 +109,7 @@ export default function VoiceAgent() {
         },
       })
       sessionRef.current = session
-      questionRef.current = { id: session.questionId, title: session.questionTitle }
+      questionRef.current = { id: session.questionId, formId: session.formId, title: session.questionTitle }
       setRunning(true)
       setMuted(false)
       startTimer()
@@ -132,8 +145,9 @@ export default function VoiceAgent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           transcript: transcriptRef.current,
-          examType: EXAM_TYPE,
+          examType: params.exam,
           questionId: questionRef.current.id,
+          formId: questionRef.current.formId,
           durationSec: sessionSecRef.current,
         }),
       })
@@ -146,7 +160,7 @@ export default function VoiceAgent() {
       wordCount:         wordCountRef.current,
       avgConfidence:     feedback?.score ?? 72,
       questionTitle:     questionRef.current.title || 'Clinical case',
-      examType:          EXAM_TYPE,
+      examType:          params.exam,
       feedback,
       transcript:        transcriptRef.current,
       date:              new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }),

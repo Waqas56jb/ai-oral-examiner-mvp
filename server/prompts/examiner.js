@@ -38,18 +38,46 @@ export const FEEDBACK_DOMAINS = [
   'Communication',
 ]
 
-/** Normalise a DB row (or partial) into the shape this prompt expects. */
+/**
+ * Normalise a case from ANY source into one shape the prompt understands:
+ *  - DB row:      { id, title, stem, vitals, marking_criteria, model_answer }
+ *  - Jotform case:{ formId, title, category, scenario, questions[], modelAnswers[], hints }
+ *  - Sample case: SAMPLE_CASE
+ */
 export function normalizeQuestion(q) {
-  if (!q) return SAMPLE_CASE
+  if (!q) {
+    return {
+      id: null,
+      source: 'sample',
+      title: SAMPLE_CASE.title,
+      examType: SAMPLE_CASE.exam_type,
+      scenario: SAMPLE_CASE.stem,
+      vitals: SAMPLE_CASE.vitals,
+      questions: [],
+      markingCriteria: SAMPLE_CASE.marking_criteria,
+      modelAnswers: [],
+      hints: '',
+    }
+  }
+  const modelAnswers = Array.isArray(q.modelAnswers)
+    ? q.modelAnswers
+    : Array.isArray(q.model_answers)
+      ? q.model_answers
+      : q.model_answer
+        ? [q.model_answer]
+        : []
   return {
-    exam_type: q.exam_type || SAMPLE_CASE.exam_type,
-    external_ref: q.external_ref || '',
+    id: q.id || null,
+    formId: q.formId || null,
+    source: q.formId ? 'jotform' : q.id ? 'db' : 'sample',
     title: q.title || 'Clinical case',
-    stem: q.stem || '',
+    examType: q.exam_type || q.category || SAMPLE_CASE.exam_type,
+    scenario: q.scenario || q.stem || '',
     vitals: q.vitals || '',
-    marking_criteria: Array.isArray(q.marking_criteria) ? q.marking_criteria : [],
-    model_answer: q.model_answer || '',
-    id: q.id,
+    questions: Array.isArray(q.questions) ? q.questions.filter(Boolean) : [],
+    markingCriteria: Array.isArray(q.marking_criteria) ? q.marking_criteria : [],
+    modelAnswers,
+    hints: q.hints || '',
   }
 }
 
@@ -59,11 +87,20 @@ export function normalizeQuestion(q) {
  */
 export function buildExaminerInstructions({ examType, candidateName = '', forVoice = false, question } = {}) {
   const c = normalizeQuestion(question)
-  const exam = examType || c.exam_type
-  const criteria = c.marking_criteria.length ? c.marking_criteria : SAMPLE_CASE.marking_criteria
-  const examinerNotes = [c.vitals, c.model_answer && `Reference answer (examiner only — NEVER reveal): ${c.model_answer}`]
+  const exam = examType || c.examType
+  const criteria = c.markingCriteria.length ? c.markingCriteria : SAMPLE_CASE.marking_criteria
+  const markingKey = [
+    ...criteria,
+    ...c.modelAnswers.map((a, i) => `Model answer ${i + 1}: ${a}`),
+    c.hints && `Examiner hints: ${c.hints}`,
+  ]
     .filter(Boolean)
-    .join(' | ')
+    .join('\n')
+  const questionsBlock = c.questions.length
+    ? `\nQuestions to put to the candidate — ask these IN ORDER, one at a time, and probe deeply after each answer before moving to the next:\n${c.questions
+        .map((q, i) => `  ${i + 1}. ${q}`)
+        .join('\n')}`
+    : ''
 
   const system = `
 You are PassGP AI Oral Examiner, an experienced senior medical examiner conducting postgraduate medical oral examinations.
@@ -82,23 +119,26 @@ RULES:
 9. Never break character. Never behave like a generic chatbot or assistant.
 10. If the candidate asks for the answer during the exam, politely state that feedback will be provided after the assessment, then continue.
 11. You have full memory of this conversation — remember the candidate's name, their exam, and every answer, and build on what they have already said.
+12. GREET ONLY ONCE. Introduce yourself a single time at the very start. After that first greeting you must NEVER greet, welcome, say "hello/hi", or re-introduce yourself again — pick up exactly where the conversation left off and continue the examination.
+13. If you receive silence, background noise, or an empty/unclear input, do NOT restart and do NOT greet again. Simply wait, or gently say "Take your time" / "Go ahead whenever you're ready", then continue from the current question.
 
 EXAM FLOW:
 
-Phase 1 — Introduction
-- Greet the candidate warmly and introduce yourself as their examiner.
+Phase 1 — Introduction (happens ONCE, only at the very start)
+- Greet the candidate warmly and introduce yourself as their examiner — ONE time only.
 - Ask which exam/college they are preparing for and how their preparation is going. Listen.
 - Explain that a short oral assessment will now begin and they should think out loud.
+- After this, move into the case and NEVER greet or re-introduce yourself again.
 
 Phase 2 — Case Presentation
 - Present the clinical scenario clearly and concisely (see CASE DATA below).
 
 Phase 3 — Interactive Examination
-- Ask questions based on the case.
+- If a list of questions is provided in CASE DATA, work through them IN ORDER (still one at a time). Otherwise ask questions based on the case.
 - Generate follow-up questions dynamically from the candidate's responses.
 - Probe deeper when responses are incomplete or vague.
 - Explore differential diagnosis, investigations, management, patient safety, and communication.
-- You ASK and PROBE; the candidate answers. Never answer for them.
+- You ASK and PROBE; the candidate answers. Never answer for them, and never read out the model answers.
 
 Phase 4 — Closing (spoken)
 - When the candidate indicates they are finished, stop examining and give a brief,
@@ -108,9 +148,12 @@ Phase 4 — Closing (spoken)
 CASE DATA:
 Exam: ${exam}
 Case Title: ${c.title}
-Case Scenario: ${c.stem.replace(/\s+/g, ' ').trim()}
-Examiner Notes (reveal only if appropriate, never the reference answer): ${examinerNotes || 'None'}
-Marking Criteria (examiner only — NEVER reveal): ${criteria.join('; ')}
+Case Scenario: ${c.scenario.replace(/\s+/g, ' ').trim()}
+${c.vitals ? `Examiner Notes (reveal observations only if the candidate asks): ${c.vitals}` : ''}${questionsBlock}
+
+MARKING KEY (EXAMINER ONLY — NEVER reveal, read out, or hint any of this to the candidate; use it silently to judge and to write feedback):
+${markingKey}
+
 Expected Competencies: Clinical reasoning, differential diagnosis, investigations, management, patient safety, and communication.
 
 Always behave like a real medical examiner. Never act as a chatbot.

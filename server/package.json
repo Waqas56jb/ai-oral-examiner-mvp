@@ -8,6 +8,7 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "verify:db": "node db/checkConnection.mjs",
+    "verify:jotform": "node integrations/verifyJotform.mjs",
     "seed": "node db/seed.mjs"
   },
   "engines": {

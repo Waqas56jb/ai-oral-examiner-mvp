@@ -19,7 +19,7 @@ import { apiUrl } from './config'
 const SESSION_ENDPOINT = apiUrl('/api/realtime/session')
 const FALLBACK_WEBRTC_URL = 'https://api.openai.com/v1/realtime/calls'
 
-export async function startRealtimeExam({ candidateName = '', examType = 'RACGP', handlers = {} } = {}) {
+export async function startRealtimeExam({ candidateName = '', examType = 'RACGP', formId = null, handlers = {} } = {}) {
   const {
     onState = () => {},
     onLatency = () => {},
@@ -33,7 +33,7 @@ export async function startRealtimeExam({ candidateName = '', examType = 'RACGP'
   const tokenRes = await fetch(SESSION_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ candidateName, examType }),
+    body: JSON.stringify({ candidateName, examType, formId }),
   })
   if (!tokenRes.ok) {
     const detail = await safeText(tokenRes)
@@ -168,6 +168,7 @@ export async function startRealtimeExam({ candidateName = '', examType = 'RACGP'
     /** Tear down the entire session. */
     stop: cleanup,
     questionId: session?.questionId || null,
+    formId: session?.formId || formId || null,
     questionTitle: session?.questionTitle || null,
     examType: session?.examType || examType,
     pc,
