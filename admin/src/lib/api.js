@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 
-const BASE = import.meta.env.VITE_API_BASE || ''
+// Defaults to the live backend; override with VITE_API_BASE (e.g. http://localhost:5050)
+const BASE = (import.meta.env.VITE_API_BASE || 'https://ai-oral-examiner-backend.vercel.app').replace(/\/$/, '')
 
 async function authHeader() {
   const { data } = await supabase.auth.getSession()
