@@ -1,0 +1,63 @@
+/* Themed animated aura behind the live voice orb (admin-selected template). */
+.va-bg { position: relative; }
+.va-card { position: relative; z-index: 1; }
+
+.va-theme-aura {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.va-theme-aura::before,
+.va-theme-aura::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(72px);
+}
+.va-theme-aura::before {
+  width: 480px;
+  height: 480px;
+  top: 6%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, var(--wt-c1, #818cf8), transparent 64%);
+  opacity: 0.5;
+  animation: wtAuraA 9s ease-in-out infinite;
+}
+.va-theme-aura::after {
+  width: 380px;
+  height: 380px;
+  bottom: 2%;
+  left: 32%;
+  background: radial-gradient(circle, var(--wt-c3, #38bdf8), transparent 64%);
+  opacity: 0.36;
+  animation: wtAuraB 12s ease-in-out infinite;
+}
+.va-theme-aura__mid {
+  position: absolute;
+  width: 320px;
+  height: 320px;
+  top: 30%;
+  right: 22%;
+  border-radius: 50%;
+  filter: blur(60px);
+  background: radial-gradient(circle, var(--wt-c2, #c084fc), transparent 64%);
+  opacity: 0.3;
+  animation: wtAuraB 10s ease-in-out infinite reverse;
+}
+
+/* holographic / plasma flavour: slowly cycle hue */
+.va-bg[data-wt-anim='prism'] .va-theme-aura,
+.va-bg[data-wt-anim='blob'] .va-theme-aura {
+  animation: wtHue 8s linear infinite;
+}
+
+@keyframes wtAuraA { 0%, 100% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-42%) scale(1.16); } }
+@keyframes wtAuraB { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(22px, -12px) scale(1.13); } }
+@keyframes wtHue { to { filter: hue-rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .va-theme-aura, .va-theme-aura::before, .va-theme-aura::after, .va-theme-aura__mid { animation: none; }
+}

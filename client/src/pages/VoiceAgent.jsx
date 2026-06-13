@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import OrbCanvas from '../components/OrbCanvas'
-import WaveRing from '../components/WaveRing'
+import WidgetDesign from '../components/WidgetDesign'
 import { useExam } from '../context/ExamContext'
 import { startRealtimeExam } from '../services/realtimeClient'
 import { apiUrl } from '../services/config'
+import { WIDGET_THEMES, DEFAULT_THEME } from '../services/widgetThemes'
 import './VoiceAgent.css'
+import '../styles/widgetTheme.css'
 
 const EXAM_TYPE = 'RACGP'
 
@@ -40,6 +41,20 @@ export default function VoiceAgent() {
   const navigate = useNavigate()
   const { setSessionData } = useExam()
   const params = useRef(readParams()).current
+  const [theme, setTheme] = useState({ ...WIDGET_THEMES[DEFAULT_THEME], id: DEFAULT_THEME })
+
+  // Apply the admin-selected widget appearance
+  useEffect(() => {
+    let active = true
+    fetch(apiUrl('/api/widget-theme'))
+      .then((r) => r.json())
+      .then((d) => {
+        const t = WIDGET_THEMES[d?.template]
+        if (active && t) setTheme({ ...t, id: d.template })
+      })
+      .catch(() => {})
+    return () => { active = false }
+  }, [])
 
   const [examState, setExamState] = useState('idle')
   const [running,   setRunning]   = useState(false)
@@ -187,7 +202,14 @@ export default function VoiceAgent() {
   const subText  = examState === 'speak' && liveCaption ? liveCaption : (errorMsg && examState === 'error' ? errorMsg : meta.sub)
 
   return (
-    <div className="va-bg">
+    <div
+      className="va-bg"
+      data-wt-anim={theme.design}
+      style={{ '--wt-c1': theme.c1, '--wt-c2': theme.c2, '--wt-c3': theme.c3, '--c1': theme.c1, '--c2': theme.c2, '--c3': theme.c3 }}
+    >
+      <div className="va-theme-aura" aria-hidden="true">
+        <span className="va-theme-aura__mid" />
+      </div>
       <div className={`va-card state-${examState}`}>
 
         {/* Header */}
@@ -212,12 +234,8 @@ export default function VoiceAgent() {
             <div className="va-atmo va-atmo-2" />
             <div className="va-atmo va-atmo-3" />
             <div className="va-orb-stage">
-              <OrbCanvas examState={orbStateFor(examState)} />
-              <WaveRing  examState={orbStateFor(examState)} />
-              <div className="va-glass-core">
-                <div className="va-core-scan" />
-                <div className="va-core-pulse" />
-              </div>
+              {/* Live widget design — synced from the admin-selected template */}
+              <WidgetDesign design={theme.design} />
             </div>
           </div>
         </div>

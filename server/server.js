@@ -30,6 +30,49 @@ async function resolveCase({ formId, questionId, examType }) {
 const apiKey = getApiKey()
 const openai = new OpenAI({ apiKey })
 
+/* ---- OpenAI fallback key (admin-set, used when the primary fails/quota) ---- */
+let _fbCache = { key: null, at: 0 }
+async function getFallbackKey() {
+  try {
+    if (!supabase) return null
+    if (Date.now() - _fbCache.at < 60_000) return _fbCache.key
+    const { data } = await supabase.from('app_settings').select('value').eq('key', 'openai_fallback').maybeSingle()
+    _fbCache = { key: data?.value?.key || null, at: Date.now() }
+    return _fbCache.key
+  } catch {
+    return null
+  }
+}
+// Voice chosen by the admin (AI Config), falling back to the code default.
+let _voiceCache = { v: null, at: 0 }
+async function activeVoice() {
+  try {
+    if (!supabase) return config.voice
+    if (Date.now() - _voiceCache.at < 60_000 && _voiceCache.v) return _voiceCache.v
+    const { data } = await supabase.from('app_settings').select('value').eq('key', 'ai_config').maybeSingle()
+    _voiceCache = { v: data?.value?.voice || config.voice, at: Date.now() }
+    return _voiceCache.v
+  } catch {
+    return config.voice
+  }
+}
+function isQuotaOrAuth(e, status) {
+  const s = status ?? e?.status ?? e?.response?.status
+  return s === 429 || s === 401 || /quota|rate.?limit|insufficient|exceeded|billing/i.test(e?.message || '')
+}
+// Chat completion that transparently retries on the fallback key.
+async function chatCreate(params, options) {
+  try {
+    return await openai.chat.completions.create(params, options)
+  } catch (e) {
+    if (!isQuotaOrAuth(e)) throw e
+    const fk = await getFallbackKey()
+    if (!fk) throw e
+    console.warn('OpenAI primary key failed — retrying with admin fallback key.')
+    return await new OpenAI({ apiKey: fk }).chat.completions.create(params, options)
+  }
+}
+
 const app = express()
 app.use(express.json({ limit: '1mb' }))
 app.use(
@@ -51,8 +94,19 @@ app.get('/api/health', (_req, res) => {
     service: 'passgp-server',
     chatModel: config.chatModel,
     realtimeModel: config.realtimeModel,
-    case: SAMPLE_CASE.id,
+    case: SAMPLE_CASE.external_ref,
   })
+})
+
+// Public: the admin-selected voice-agent widget theme (for the client widget)
+app.get('/api/widget-theme', async (_req, res) => {
+  try {
+    if (!supabase) return res.json({ template: 'cosmic' })
+    const { data } = await supabase.from('app_settings').select('value').eq('key', 'widget_theme').maybeSingle()
+    res.json({ template: data?.value?.template || 'cosmic' })
+  } catch {
+    res.json({ template: 'cosmic' })
+  }
 })
 
 /* ------------------------------------------------------------------ */
@@ -75,38 +129,46 @@ app.post('/api/realtime/session', async (req, res) => {
       question: rawCase,
     })
 
-    const response = await fetch(config.realtimeClientSecretsUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        session: {
-          type: 'realtime',
-          model: config.realtimeModel,
-          instructions,
-          audio: {
-            input: {
-              transcription: { model: config.transcriptionModel },
-              // Filter out background noise before it reaches the model.
-              noise_reduction: { type: 'near_field' },
-              // Semantic VAD waits for a natural end-of-turn instead of
-              // reacting to every blip of background sound. interrupt_response is
-              // OFF so the examiner always finishes its question before listening
-              // (residual echo/noise can't cut it off mid-sentence).
-              turn_detection: {
-                type: 'semantic_vad',
-                eagerness: 'low',
-                create_response: true,
-                interrupt_response: false,
-              },
+    const sessionBody = JSON.stringify({
+      session: {
+        type: 'realtime',
+        model: config.realtimeModel,
+        instructions,
+        audio: {
+          input: {
+            transcription: { model: config.transcriptionModel },
+            // Filter out background noise before it reaches the model.
+            noise_reduction: { type: 'near_field' },
+            // Semantic VAD waits for a natural end-of-turn instead of
+            // reacting to every blip of background sound. interrupt_response is
+            // OFF so the examiner always finishes its question before listening.
+            turn_detection: {
+              type: 'semantic_vad',
+              eagerness: 'low',
+              create_response: true,
+              interrupt_response: false,
             },
-            output: { voice: config.voice, speed: 1.0 },
           },
+          output: { voice: await activeVoice(), speed: 1.0 },
         },
-      }),
+      },
     })
+
+    const mint = (key) =>
+      fetch(config.realtimeClientSecretsUrl, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: sessionBody,
+      })
+
+    let response = await mint(apiKey)
+    if (!response.ok && (response.status === 401 || response.status === 429)) {
+      const fk = await getFallbackKey()
+      if (fk) {
+        console.warn('Realtime primary key failed — using admin fallback key.')
+        response = await mint(fk)
+      }
+    }
 
     if (!response.ok) {
       const detail = await response.text()
@@ -161,7 +223,7 @@ app.post('/api/chat', async (req, res) => {
   try {
     const systemPrompt = buildExaminerInstructions({ examType, candidateName, forVoice: false })
 
-    const stream = await openai.chat.completions.create(
+    const stream = await chatCreate(
       {
         model: config.chatModel,
         stream: true,
@@ -205,7 +267,7 @@ app.post('/api/feedback', async (req, res) => {
     const systemPrompt = buildExaminerInstructions({ examType, forVoice: false, question: rawCase })
     const userPrompt = buildFeedbackUserPrompt(transcript)
 
-    const completion = await openai.chat.completions.create({
+    const completion = await chatCreate({
       model: config.chatModel,
       temperature: 0.4,
       response_format: { type: 'json_object' },

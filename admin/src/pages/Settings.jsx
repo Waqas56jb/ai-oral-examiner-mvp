@@ -5,9 +5,9 @@ import {
 } from 'react-icons/fi'
 import { SiOpenai } from 'react-icons/si'
 import { supabase } from '../lib/supabase'
-import { Card, Button, PageLoader, Badge, Field } from '../components/ui'
+import { Card, Button, PageLoader, Badge, Field, Modal } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
-import WidgetPreview from '../components/WidgetPreview'
+import WidgetPreview, { WidgetMockup } from '../components/WidgetPreview'
 import { widgetThemes, defaultWidgetTheme } from '../data/widgetThemes'
 
 export default function Settings() {
@@ -20,6 +20,22 @@ export default function Settings() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [keySaving, setKeySaving] = useState(false)
+  const [keySaved, setKeySaved] = useState(false)
+
+  const selectedTheme = widgetThemes.find((t) => t.id === theme) || widgetThemes[0]
+
+  // Save ONLY the OpenAI fallback key (persists in DB, reloaded on every visit)
+  const saveKey = async () => {
+    setKeySaving(true); setKeySaved(false); setError('')
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert({ key: 'openai_fallback', value: { key: fallbackKey.trim() }, updated_at: new Date().toISOString() })
+    setKeySaving(false)
+    if (error) setError(error.message)
+    else { setKeySaved(true); setTimeout(() => setKeySaved(false), 3500) }
+  }
 
   useEffect(() => {
     ;(async () => {
@@ -65,7 +81,8 @@ export default function Settings() {
       {/* ---- Voice agent appearance ---- */}
       <Card style={{ marginBottom: 20 }}
         title={<span className="section-title"><span className="section-title__icon"><FiZap /></span> Voice Agent Appearance</span>}
-        sub="Pick the animated 3D widget design — it replaces the live examiner widget on the website / embedded iframe.">
+        sub="Pick the animated 3D widget design — it replaces the live examiner widget on the website / embedded iframe."
+        action={<Button variant="ghost" icon={<FiEye />} onClick={() => setPreviewOpen(true)}>Preview “{selectedTheme.name}”</Button>}>
         <div className="tpl-grid">
           {widgetThemes.map((t) => (
             <button key={t.id} className={`tpl-card ${theme === t.id ? 'selected' : ''}`} onClick={() => setTheme(t.id)}>
@@ -98,8 +115,19 @@ export default function Settings() {
             </button>
           </div>
         </Field>
-        <div className="alert alert--success" style={{ marginTop: 12 }}>
-          <FiShield /> Stored securely in the database (admin-only). The server reads it server-side only — never exposed to the browser.
+        <div className="flex items-center between gap" style={{ marginTop: 14, flexWrap: 'wrap' }}>
+          <span className="muted" style={{ fontSize: '0.84rem' }}>
+            {fallbackKey
+              ? '✓ A fallback key is stored — it loads automatically every time and the server uses it on failover.'
+              : 'No fallback key stored yet.'}
+          </span>
+          <div className="flex items-center gap">
+            {keySaved && <span className="badge badge--green"><FiCheck /> Key stored</span>}
+            <Button size="sm" loading={keySaving} icon={<FiSave />} onClick={saveKey}>Save key</Button>
+          </div>
+        </div>
+        <div className="alert alert--success" style={{ marginTop: 14 }}>
+          <FiShield /> Stored securely in the database (admin-only) and persists permanently. The server reads it server-side only — never exposed to the browser.
         </div>
       </Card>
 
@@ -138,6 +166,25 @@ export default function Settings() {
           <div className="kv"><span className="kv__k">Admin access</span><span className="kv__v"><Badge color="green" dot>Verified</Badge></span></div>
         </div>
       </Card>
+
+      {previewOpen && (
+        <Modal title={`Live preview — ${selectedTheme.name}`} onClose={() => setPreviewOpen(false)}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setPreviewOpen(false)}>Close</Button>
+              <Button icon={<FiCheck />} onClick={() => { setPreviewOpen(false); save() }}>Use this design</Button>
+            </>
+          }>
+          <p className="muted" style={{ textAlign: 'center', marginTop: -4 }}>
+            This is how the voice examiner widget will look on your website.
+          </p>
+          <div style={{ display: 'grid', placeItems: 'center', padding: '8px 0 4px', background: 'radial-gradient(circle at 50% 30%, #11182a, #0b1120)', borderRadius: 18 }}>
+            <div style={{ padding: 18 }}>
+              <WidgetMockup theme={selectedTheme} />
+            </div>
+          </div>
+        </Modal>
+      )}
     </>
   )
 }
