@@ -15,7 +15,7 @@ export const config = {
   realtimeClientSecretsUrl: 'https://api.openai.com/v1/realtime/client_secrets',
   // Browser opens the WebRTC call here using the ephemeral token:
   realtimeCallsUrl: 'https://api.openai.com/v1/realtime/calls',
-  voice: 'alloy', // alloy | ash | ballad | coral | echo | sage | shimmer | verse | marin | cedar
+  voice: 'marin', // most natural/human voices: marin | cedar | sage | verse
 
   // --- OpenAI Chat (text streaming fallback) ---
   chatModel: 'gpt-4o-mini',

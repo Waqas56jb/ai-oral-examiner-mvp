@@ -112,6 +112,8 @@ export function DomainBars({ domains = [] }) {
 
 function shortLabel(name) {
   return name
+    .replace('Clinical Reasoning', 'Reasoning')
+    .replace('Communication', 'Comms')
     .replace('Safety & Red Flags', 'Safety')
     .replace('Structured Approach', 'Structure')
     .replace('Clinical Knowledge', 'Knowledge')

@@ -4,7 +4,7 @@ import cors from 'cors'
 import OpenAI from 'openai'
 
 import { config, getApiKey } from './config.js'
-import { buildExaminerInstructions, normalizeQuestion, SAMPLE_CASE } from './prompts/examiner.js'
+import { buildExaminerInstructions, buildFeedbackUserPrompt, normalizeQuestion, SAMPLE_CASE } from './prompts/examiner.js'
 import { getRandomQuestion, getQuestionById, saveSession } from './db/repo.js'
 
 const apiKey = getApiKey()
@@ -69,8 +69,20 @@ app.post('/api/realtime/session', async (req, res) => {
           model: config.realtimeModel,
           instructions,
           audio: {
-            input: { transcription: { model: config.transcriptionModel } },
-            output: { voice: config.voice },
+            input: {
+              transcription: { model: config.transcriptionModel },
+              // Filter out background noise before it reaches the model.
+              noise_reduction: { type: 'near_field' },
+              // Semantic VAD waits for a natural end-of-turn instead of
+              // reacting to every blip of background sound.
+              turn_detection: {
+                type: 'semantic_vad',
+                eagerness: 'low',
+                create_response: true,
+                interrupt_response: true,
+              },
+            },
+            output: { voice: config.voice, speed: 1.0 },
           },
         },
       }),
@@ -165,29 +177,12 @@ app.post('/api/chat', async (req, res) => {
 app.post('/api/feedback', async (req, res) => {
   const { transcript = [], examType = 'RACGP', questionId, durationSec = 0, save = true } = req.body || {}
 
-  // Build a richer, state-of-the-art evaluation and (best-effort) persist it.
-  const fallback = {
-    confidence: 72,
-    score: 72,
-    result: 'Borderline',
-    summary: 'The session was assessed automatically. A detailed breakdown was unavailable.',
-    overallImpression: '',
-    strengths: [],
-    improvements: [],
-    recommendations: [],
-    domains: DEFAULT_DOMAINS.map((d) => ({ name: d, score: 70, comment: '' })),
-    detailedFeedback: '',
-  }
-
   try {
     const dbQuestion = questionId ? await getQuestionById(questionId) : null
     const question = normalizeQuestion(dbQuestion)
 
-    const convo = (Array.isArray(transcript) ? transcript : [])
-      .map((t) => `${t.role === 'examiner' ? 'EXAMINER' : 'CANDIDATE'}: ${t.text}`)
-      .join('\n')
-
     const systemPrompt = buildExaminerInstructions({ examType, forVoice: false, question })
+    const userPrompt = buildFeedbackUserPrompt(transcript)
 
     const completion = await openai.chat.completions.create({
       model: config.chatModel,
@@ -195,24 +190,7 @@ app.post('/api/feedback', async (req, res) => {
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: systemPrompt },
-        {
-          role: 'user',
-          content:
-            `The oral exam has ended. Produce a thorough, professional examiner's assessment of the ` +
-            `CANDIDATE based only on the transcript below. Be specific and reference what the candidate ` +
-            `actually said. Respond with a JSON object using EXACTLY these keys:\n` +
-            `"score" (integer 0-100 overall),\n` +
-            `"confidence" (integer 0-100, examiner confidence in this judgement),\n` +
-            `"result" (one of "Clear pass","Borderline","Below standard"),\n` +
-            `"summary" (2-3 sentence overall impression),\n` +
-            `"detailedFeedback" (a detailed multi-paragraph narrative, 120-220 words),\n` +
-            `"strengths" (array of 3-5 specific short strings),\n` +
-            `"improvements" (array of 3-5 specific short strings),\n` +
-            `"recommendations" (array of 3-4 concrete next-step study actions),\n` +
-            `"domains" (array of EXACTLY these five objects, each {"name","score" 0-100,"comment" one short sentence}: ` +
-            `"Clinical Knowledge","Communication","Structured Approach","Safety & Red Flags","Time Management").\n\n` +
-            `TRANSCRIPT:\n${convo || '(no transcript captured — the candidate did not engage)'}`,
-        },
+        { role: 'user', content: userPrompt },
       ],
     })
 
@@ -223,63 +201,96 @@ app.post('/api/feedback', async (req, res) => {
       data = {}
     }
 
-    const domains = normalizeDomains(data.domains)
-    const result = {
-      confidence: clampInt(data.confidence, 0, 100, 72),
-      score: clampInt(data.score, 0, 100, avgDomain(domains)),
-      result: data.result || 'Borderline',
-      summary: str(data.summary),
-      detailedFeedback: str(data.detailedFeedback),
-      strengths: arr(data.strengths),
-      improvements: arr(data.improvements),
-      recommendations: arr(data.recommendations),
-      domains,
-    }
+    const report = buildReport(data)
 
     // Persist (best-effort; never blocks the response on a DB error)
     let sessionId = null
     if (save) {
-      const wordCount = (Array.isArray(transcript) ? transcript : []).reduce(
-        (n, t) => n + String(t.text || '').split(/\s+/).filter(Boolean).length,
-        0
-      )
-      const questionsAnswered = (Array.isArray(transcript) ? transcript : []).filter((t) => t.role === 'examiner').length
+      const list = Array.isArray(transcript) ? transcript : []
+      const wordCount = list.reduce((n, t) => n + String(t.text || '').split(/\s+/).filter(Boolean).length, 0)
+      const questionsAnswered = list.filter((t) => t.role === 'examiner').length
       const saved = await saveSession({
         questionId: question.id || null,
         examType,
         durationSec,
         questionsAnswered,
         wordCount,
-        feedback: result,
+        feedback: {
+          score: report.score, // 0-100
+          result: report.result,
+          summary: report.examiner_comments,
+          strengths: report.strengths,
+          improvements: report.weaknesses,
+        },
         transcript,
       })
       sessionId = saved?.id || null
     }
 
-    res.json({ ...result, sessionId })
+    res.json({ ...report, sessionId })
   } catch (err) {
     console.error('Feedback error:', err)
-    res.json(fallback)
+    res.json(FEEDBACK_FALLBACK)
   }
 })
 
-const DEFAULT_DOMAINS = ['Clinical Knowledge', 'Communication', 'Structured Approach', 'Safety & Red Flags', 'Time Management']
+/* Build the scored report from the model's JSON (scores are 0-10). */
+function buildReport(data) {
+  const s = (v, fb = 6) => clampInt(v, 0, 10, fb)
+  const dr = s(data.clinical_reasoning)
+  const dx = s(data.diagnosis)
+  const mg = s(data.management)
+  const co = s(data.communication)
+  const overall = s(data.overall_score, Math.round((dr + dx + mg + co) / 4))
+  const result = band10(overall)
 
-function normalizeDomains(d) {
-  const list = Array.isArray(d) ? d : []
-  return DEFAULT_DOMAINS.map((name) => {
-    const found = list.find((x) => x && typeof x.name === 'string' && x.name.toLowerCase().startsWith(name.toLowerCase().slice(0, 6)))
-    return {
-      name,
-      score: clampInt(found?.score, 0, 100, 70),
-      comment: str(found?.comment),
-    }
-  })
+  return {
+    // ---- exact production JSON schema (0-10) ----
+    overall_score: overall,
+    clinical_reasoning: dr,
+    diagnosis: dx,
+    management: mg,
+    communication: co,
+    strengths: arr(data.strengths),
+    weaknesses: arr(data.weaknesses),
+    recommendations: arr(data.recommendations),
+    examiner_comments: str(data.examiner_comments),
+    // ---- derived fields for charts / report / DB (0-100) ----
+    score: overall * 10,
+    result,
+    detailedFeedback: str(data.examiner_comments),
+    improvements: arr(data.weaknesses),
+    domains: [
+      { name: 'Clinical Reasoning', score: dr * 10, comment: '' },
+      { name: 'Diagnosis', score: dx * 10, comment: '' },
+      { name: 'Management', score: mg * 10, comment: '' },
+      { name: 'Communication', score: co * 10, comment: '' },
+    ],
+  }
 }
-function avgDomain(domains) {
-  if (!domains.length) return 72
-  return Math.round(domains.reduce((a, b) => a + b.score, 0) / domains.length)
+
+function band10(v) {
+  if (v >= 9) return 'Excellent'
+  if (v >= 7) return 'Competent'
+  if (v >= 5) return 'Borderline Pass'
+  return 'Needs Significant Improvement'
 }
+
+const FEEDBACK_FALLBACK = {
+  overall_score: 6, clinical_reasoning: 6, diagnosis: 6, management: 6, communication: 6,
+  strengths: [], weaknesses: [], recommendations: [],
+  examiner_comments: 'The session was assessed automatically; a detailed breakdown was unavailable.',
+  score: 60, result: 'Borderline Pass',
+  detailedFeedback: 'The session was assessed automatically; a detailed breakdown was unavailable.',
+  improvements: [],
+  domains: [
+    { name: 'Clinical Reasoning', score: 60 },
+    { name: 'Diagnosis', score: 60 },
+    { name: 'Management', score: 60 },
+    { name: 'Communication', score: 60 },
+  ],
+}
+
 function clampInt(v, min, max, fallback) {
   const n = Math.round(Number(v))
   if (Number.isNaN(n)) return fallback

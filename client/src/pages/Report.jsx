@@ -6,7 +6,7 @@ import { useExam } from '../context/ExamContext'
 import { ScoreGauge, RadarChart, DomainBars } from '../components/charts/Charts'
 import './Report.css'
 
-const DEFAULT_DOMAINS = ['Clinical Knowledge', 'Communication', 'Structured Approach', 'Safety & Red Flags', 'Time Management']
+const DEFAULT_DOMAINS = ['Clinical Reasoning', 'Diagnosis', 'Management', 'Communication']
 
 export default function Report() {
   const navigate = useNavigate()
@@ -37,17 +37,20 @@ export default function Report() {
   const domains =
     fb.domains && fb.domains.length
       ? fb.domains
-      : DEFAULT_DOMAINS.map((n) => ({ name: n, score: fb.confidence ?? 70, comment: '' }))
+      : DEFAULT_DOMAINS.map((n) => ({ name: n, score: 60, comment: '' }))
   const score = fb.score ?? Math.round(domains.reduce((a, b) => a + b.score, 0) / domains.length)
-  const confidence = fb.confidence ?? sessionData.avgConfidence ?? 72
-  const result = fb.result || (score >= 80 ? 'Clear pass' : score >= 65 ? 'Borderline' : 'Below standard')
+  const overall = fb.overall_score ?? Math.round(score / 10)
+  const result =
+    fb.result ||
+    (overall >= 9 ? 'Excellent' : overall >= 7 ? 'Competent' : overall >= 5 ? 'Borderline Pass' : 'Needs Significant Improvement')
   const summary = fb.summary || ''
-  const detailed = fb.detailedFeedback || ''
+  const detailed = fb.detailedFeedback || fb.examiner_comments || ''
   const strengths = fb.strengths || []
-  const improvements = fb.improvements || []
+  const improvements = fb.improvements || fb.weaknesses || []
   const recommendations = fb.recommendations || []
   const timeStr = fmtTime(durationSec)
-  const resultClass = result.toLowerCase().includes('clear') ? 'pass' : result.toLowerCase().includes('below') ? 'fail' : 'merit'
+  const rl = result.toLowerCase()
+  const resultClass = rl.includes('excellent') || rl.includes('competent') ? 'pass' : rl.includes('needs') || rl.includes('below') ? 'fail' : 'merit'
 
   async function downloadPDF() {
     if (!reportRef.current) return
@@ -131,7 +134,7 @@ export default function Report() {
           <Stat icon="⏱" label="Duration" value={timeStr} />
           <Stat icon="❓" label="Questions" value={questionsAnswered} />
           <Stat icon="💬" label="Words spoken" value={wordCount} />
-          <Stat icon="🎯" label="Examiner confidence" value={`${confidence}%`} />
+          <Stat icon="🎯" label="Overall" value={`${overall}/10`} />
         </div>
 
         {/* Charts row */}

@@ -144,7 +144,7 @@ export default function VoiceAgent() {
       durationSec:       sessionSecRef.current,
       questionsAnswered: turnsRef.current,
       wordCount:         wordCountRef.current,
-      avgConfidence:     feedback?.confidence ?? 72,
+      avgConfidence:     feedback?.score ?? 72,
       questionTitle:     questionRef.current.title || 'Clinical case',
       examType:          EXAM_TYPE,
       feedback,

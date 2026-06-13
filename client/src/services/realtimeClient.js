@@ -93,9 +93,24 @@ export async function startRealtimeExam({ candidateName = '', examType = 'RACGP'
     handleEvent(msg, { onState, onLatency, onExaminerDelta, onExaminerFinal, onCandidateFinal, onError }, state)
   })
 
+  // WebRTC briefly flips to "disconnected" on minor network/noise hiccups and
+  // usually recovers on its own. Only surface a fatal error if it stays down.
+  let dropTimer = null
   pc.addEventListener('connectionstatechange', () => {
-    if (['failed', 'disconnected'].includes(pc.connectionState)) {
-      onError('The voice connection dropped. Please restart the session.')
+    const st = pc.connectionState
+    if (st === 'connected' || st === 'completed') {
+      if (dropTimer) {
+        clearTimeout(dropTimer)
+        dropTimer = null
+      }
+      return
+    }
+    if ((st === 'disconnected' || st === 'failed') && !dropTimer) {
+      dropTimer = setTimeout(() => {
+        if (pc.connectionState !== 'connected' && pc.connectionState !== 'completed') {
+          onError('The voice connection dropped. Please restart the session.')
+        }
+      }, st === 'failed' ? 6000 : 10000)
     }
   })
 
@@ -120,6 +135,10 @@ export async function startRealtimeExam({ candidateName = '', examType = 'RACGP'
   await pc.setRemoteDescription(answer)
 
   function cleanup() {
+    if (dropTimer) {
+      clearTimeout(dropTimer)
+      dropTimer = null
+    }
     try {
       micStream?.getTracks().forEach((t) => t.stop())
     } catch { /* noop */ }
