@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { FiMenu, FiBell, FiLogOut, FiSearch } from 'react-icons/fi'
+import { FiMenu, FiLogOut } from 'react-icons/fi'
 import { FaMicrophoneAlt } from 'react-icons/fa'
 import { navGroups, pageMeta } from '../data/nav'
 import { useAuth } from '../context/AuthContext'
@@ -77,14 +77,6 @@ export default function Layout() {
             <p>{meta.sub}</p>
           </div>
           <div className="topbar__spacer" />
-          <div className="topbar__search">
-            <FiSearch />
-            <input placeholder="Search anything…" />
-          </div>
-          <button className="topbar__icon-btn">
-            <FiBell />
-            <span className="topbar__dot" />
-          </button>
         </header>
 
         <main className="content">
