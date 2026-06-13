@@ -14,7 +14,9 @@
  *   session.stop()             // tear everything down
  */
 
-const SESSION_ENDPOINT = '/api/realtime/session'
+import { apiUrl } from './config'
+
+const SESSION_ENDPOINT = apiUrl('/api/realtime/session')
 const FALLBACK_WEBRTC_URL = 'https://api.openai.com/v1/realtime/calls'
 
 export async function startRealtimeExam({ candidateName = '', examType = 'RACGP', handlers = {} } = {}) {
@@ -137,6 +139,9 @@ export async function startRealtimeExam({ candidateName = '', examType = 'RACGP'
     },
     /** Tear down the entire session. */
     stop: cleanup,
+    questionId: session?.questionId || null,
+    questionTitle: session?.questionTitle || null,
+    examType: session?.examType || examType,
     pc,
     dc,
   }

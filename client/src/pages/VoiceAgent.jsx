@@ -4,6 +4,7 @@ import OrbCanvas from '../components/OrbCanvas'
 import WaveRing from '../components/WaveRing'
 import { useExam } from '../context/ExamContext'
 import { startRealtimeExam } from '../services/realtimeClient'
+import { apiUrl } from '../services/config'
 import './VoiceAgent.css'
 
 const EXAM_TYPE = 'RACGP'
@@ -45,6 +46,7 @@ export default function VoiceAgent() {
   const turnsRef        = useRef(0)
   const transcriptRef   = useRef([])
   const startedRef      = useRef(false)
+  const questionRef     = useRef({ id: null, title: null })
 
   const stopTimer = () => clearInterval(sessionTimerRef.current)
 
@@ -94,6 +96,7 @@ export default function VoiceAgent() {
         },
       })
       sessionRef.current = session
+      questionRef.current = { id: session.questionId, title: session.questionTitle }
       setRunning(true)
       setMuted(false)
       startTimer()
@@ -121,25 +124,30 @@ export default function VoiceAgent() {
     } catch { /* noop */ }
     sessionRef.current = null
 
-    // Ask the backend for a real assessment of the transcript.
-    let confidence = 75
+    // Ask the backend for a full, detailed assessment of the transcript.
+    let feedback = null
     try {
-      const res = await fetch('/api/feedback', {
+      const res = await fetch(apiUrl('/api/feedback'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript: transcriptRef.current, examType: EXAM_TYPE }),
+        body: JSON.stringify({
+          transcript: transcriptRef.current,
+          examType: EXAM_TYPE,
+          questionId: questionRef.current.id,
+          durationSec: sessionSecRef.current,
+        }),
       })
-      if (res.ok) {
-        const data = await res.json()
-        if (typeof data.confidence === 'number') confidence = data.confidence
-      }
-    } catch { /* fall back to default */ }
+      if (res.ok) feedback = await res.json()
+    } catch { /* fall back to null */ }
 
     setSessionData({
       durationSec:       sessionSecRef.current,
       questionsAnswered: turnsRef.current,
       wordCount:         wordCountRef.current,
-      avgConfidence:     confidence,
+      avgConfidence:     feedback?.confidence ?? 72,
+      questionTitle:     questionRef.current.title || 'Clinical case',
+      examType:          EXAM_TYPE,
+      feedback,
       transcript:        transcriptRef.current,
       date:              new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }),
     })

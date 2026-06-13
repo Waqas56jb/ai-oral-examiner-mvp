@@ -34,6 +34,7 @@ create table if not exists public.exam_questions (
   stem             text not null,
   vitals           text,
   marking_criteria jsonb not null default '[]'::jsonb,
+  model_answer     text,                       -- admin-pasted reference answer
   is_active        boolean not null default true,
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now()
