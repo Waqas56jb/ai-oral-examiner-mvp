@@ -4,7 +4,7 @@ import {
 } from 'react-icons/fi'
 import { supabase } from '../lib/supabase'
 import { apiGet, apiPost } from '../lib/api'
-import { Card, Button, IconButton, Badge, Search, EmptyState, PageLoader, Modal, Field } from '../components/ui'
+import { Card, Button, IconButton, Badge, Search, EmptyState, PageLoader, Modal, Field, AutoTextarea } from '../components/ui'
 import { fmtDate, toCsv, downloadFile } from '../lib/format'
 
 const EXAM_TYPES = ['RACGP', 'ACRRM', 'AMC', 'PESCI', 'NZREX', 'KFP', 'AKT']
@@ -197,13 +197,13 @@ export default function Questions() {
             </Field>
           </div>
           <Field label="Clinical scenario (presented to the candidate)">
-            <textarea className="textarea" value={editing.form.stem} onChange={(e) => setEditing((s) => ({ ...s, form: { ...s.form, stem: e.target.value } }))} placeholder="A 54-year-old man presents with…" />
+            <AutoTextarea value={editing.form.stem} onChange={(e) => setEditing((s) => ({ ...s, form: { ...s.form, stem: e.target.value } }))} maxHeight={460} minHeight={120} placeholder="A 54-year-old man presents with…" />
           </Field>
           <Field label="Tasks / questions to ask (one per line)">
-            <textarea className="textarea" value={editing.form.marking_criteria} onChange={(e) => setEditing((s) => ({ ...s, form: { ...s.form, marking_criteria: e.target.value } }))} placeholder={'Take a focused history\nExplain the diagnosis\nDiscuss management'} />
+            <AutoTextarea value={editing.form.marking_criteria} onChange={(e) => setEditing((s) => ({ ...s, form: { ...s.form, marking_criteria: e.target.value } }))} maxHeight={360} placeholder={'Take a focused history\nExplain the diagnosis\nDiscuss management'} />
           </Field>
           <Field label="Model answer / marking key (examiner only — never shown to candidate)">
-            <textarea className="textarea" value={editing.form.model_answer} onChange={(e) => setEditing((s) => ({ ...s, form: { ...s.form, model_answer: e.target.value } }))} placeholder="Reference answer used by the AI to grade…" />
+            <AutoTextarea value={editing.form.model_answer} onChange={(e) => setEditing((s) => ({ ...s, form: { ...s.form, model_answer: e.target.value } }))} maxHeight={320} placeholder="Reference answer used by the AI to grade…" />
           </Field>
           <label className="auth-check">
             <input type="checkbox" checked={editing.form.is_active} onChange={(e) => setEditing((s) => ({ ...s, form: { ...s.form, is_active: e.target.checked } }))} />
@@ -235,9 +235,11 @@ export default function Questions() {
 
 function ImportModal({ onClose, onDone }) {
   const [forms, setForms] = useState(null)
+  const [q, setQ] = useState('')
   const [sel, setSel] = useState({})
   const [err, setErr] = useState('')
-  const [importing, setImporting] = useState(false)
+  const [running, setRunning] = useState(false)
+  const [progress, setProgress] = useState(null)
   const [result, setResult] = useState(null)
 
   useEffect(() => {
@@ -246,48 +248,74 @@ function ImportModal({ onClose, onDone }) {
       .catch((e) => { setErr(e.message); setForms([]) })
   }, [])
 
-  const toggle = (id) => setSel((s) => ({ ...s, [id]: !s[id] }))
-  const selectedIds = Object.keys(sel).filter((k) => sel[k])
+  const filtered = useMemo(() => {
+    if (!forms) return []
+    const t = q.trim().toLowerCase()
+    return t ? forms.filter((f) => f.title.toLowerCase().includes(t)) : forms
+  }, [forms, q])
 
-  const run = async (all) => {
-    setImporting(true)
-    setErr('')
-    try {
-      const body = all ? {} : { formIds: selectedIds }
-      const d = await apiPost('/api/admin/jotform/import', body)
-      setResult(d)
-      onDone()
-    } catch (e) {
-      setErr(e.message)
-    } finally {
-      setImporting(false)
+  const toggle = (id) => setSel((s) => ({ ...s, [id]: !s[id] }))
+  const selectedForms = forms ? forms.filter((f) => sel[f.id]) : []
+
+  // Import in client-side batches so thousands of cases import without timing out.
+  const runImport = async (list) => {
+    setRunning(true); setErr(''); setResult(null)
+    const BATCH = 25
+    let imported = 0, updated = 0, failed = 0
+    for (let i = 0; i < list.length; i += BATCH) {
+      const chunk = list.slice(i, i + BATCH).map((f) => ({ id: f.id, title: f.title }))
+      try {
+        const d = await apiPost('/api/admin/jotform/import', { forms: chunk })
+        imported += d.imported || 0; updated += d.updated || 0; failed += d.failed || 0
+      } catch {
+        failed += chunk.length
+      }
+      setProgress({ done: Math.min(i + BATCH, list.length), total: list.length, imported, updated, failed })
     }
+    setRunning(false)
+    setResult({ imported, updated, failed, total: list.length })
+    onDone()
   }
 
   return (
     <Modal
       wide
       title="Import questions from Jotform"
-      onClose={onClose}
+      onClose={running ? () => {} : onClose}
       footer={
         result ? (
           <Button onClick={onClose}>Done</Button>
         ) : (
           <>
-            <Button variant="ghost" onClick={onClose}>Cancel</Button>
-            <Button variant="soft" loading={importing} onClick={() => run(true)}>Import all cases</Button>
-            <Button loading={importing} disabled={selectedIds.length === 0} onClick={() => run(false)} icon={<FiDownloadCloud />}>
-              Import selected ({selectedIds.length})
+            <Button variant="ghost" disabled={running} onClick={onClose}>Cancel</Button>
+            <Button variant="soft" loading={running} disabled={!forms?.length} onClick={() => runImport(forms)}>
+              Import all ({forms?.length || 0})
+            </Button>
+            <Button loading={running} disabled={selectedForms.length === 0} onClick={() => runImport(selectedForms)} icon={<FiDownloadCloud />}>
+              Import selected ({selectedForms.length})
             </Button>
           </>
         )
       }
     >
       {err && <div className="alert alert--error"><FiAlertCircle /> {err}</div>}
+
       {result ? (
         <div className="alert alert--success">
           <FiCheck />
-          <div>Imported <strong>{result.imported}</strong>, updated <strong>{result.updated}</strong>{result.failed ? `, ${result.failed} skipped` : ''} (of {result.total}).</div>
+          <div>Imported <strong>{result.imported}</strong>, updated <strong>{result.updated}</strong>{result.failed ? `, ${result.failed} skipped` : ''} of {result.total}.</div>
+        </div>
+      ) : running ? (
+        <div>
+          <p className="muted">Importing the question bank… keep this tab open until it finishes.</p>
+          <div style={{ height: 10, background: 'var(--line)', borderRadius: 999, overflow: 'hidden', margin: '14px 0' }}>
+            <div style={{ height: '100%', width: `${progress ? Math.round((progress.done / progress.total) * 100) : 0}%`, background: 'var(--grad)', transition: 'width .3s' }} />
+          </div>
+          {progress && (
+            <p className="muted" style={{ textAlign: 'center' }}>
+              {progress.done} / {progress.total} · imported {progress.imported}, updated {progress.updated}, failed {progress.failed}
+            </p>
+          )}
         </div>
       ) : forms === null ? (
         <div className="loader-full" style={{ minHeight: 180 }}><div className="loader-dots"><span /><span /><span /></div></div>
@@ -295,15 +323,23 @@ function ImportModal({ onClose, onDone }) {
         <EmptyState title="No case forms found" text="Make sure JOTFORM_API_KEY is set on the server." />
       ) : (
         <>
-          <p className="muted" style={{ marginBottom: 4 }}>{forms.length} clinical case forms found. Select the ones to import, or import all.</p>
-          <div className="scrollbox" style={{ border: '1px solid var(--line)', borderRadius: 12 }}>
-            {forms.map((f) => (
+          <p className="muted">
+            <strong>{forms.length.toLocaleString()}</strong> clinical case forms found on Jotform. Import the whole bank, or search & select specific cases.
+          </p>
+          <Search value={q} onChange={setQ} placeholder="Search cases by title…" />
+          <div className="scrollbox" style={{ border: '1px solid var(--line)', borderRadius: 12, marginTop: 10 }}>
+            {filtered.slice(0, 300).map((f) => (
               <label key={f.id} className="flex items-center gap" style={{ padding: '11px 14px', borderBottom: '1px solid var(--line-2)', cursor: 'pointer' }}>
                 <input type="checkbox" checked={!!sel[f.id]} onChange={() => toggle(f.id)} style={{ width: 17, height: 17, accentColor: 'var(--accent)' }} />
                 <span className="tbl__primary">{f.title}</span>
                 <span className="muted" style={{ marginLeft: 'auto', fontSize: '0.8rem' }}>#{f.id}</span>
               </label>
             ))}
+            {filtered.length > 300 && (
+              <div className="muted" style={{ padding: 12, textAlign: 'center', fontSize: '0.85rem' }}>
+                Showing first 300 of {filtered.length.toLocaleString()}. Use search to narrow down, or just “Import all”.
+              </div>
+            )}
           </div>
         </>
       )}

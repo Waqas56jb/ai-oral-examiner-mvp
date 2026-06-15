@@ -5,25 +5,39 @@ import { supabase } from './supabase.js'
  * Returns null if Supabase isn't configured or the bank is empty
  * (callers then fall back to the hard-coded sample case).
  */
+// ONLY returns questions the admin has pushed into the training set.
+// No hard-coded / sample / untrained fallback — null means "nothing trained yet".
 export async function getRandomQuestion(examType = 'RACGP') {
   if (!supabase) return null
+  const pick = (rows) => (rows && rows.length ? rows[Math.floor(Math.random() * rows.length)] : null)
   try {
-    const { data, error } = await supabase
+    // 1) Training set for this exam type
+    let r = await supabase
       .from('exam_questions')
       .select('*')
       .eq('is_active', true)
+      .eq('in_training', true)
       .eq('exam_type', examType)
-      .limit(50)
-    if (error || !data || data.length === 0) {
-      // fall back to any active question
-      const any = await supabase.from('exam_questions').select('*').eq('is_active', true).limit(50)
-      if (any.error || !any.data || any.data.length === 0) return null
-      return any.data[Math.floor(Math.random() * any.data.length)]
-    }
-    return data[Math.floor(Math.random() * data.length)]
+      .limit(500)
+    if (!r.error && r.data?.length) return pick(r.data)
+    // 2) Any case in the training set (any type)
+    r = await supabase.from('exam_questions').select('*').eq('is_active', true).eq('in_training', true).limit(500)
+    if (!r.error && r.data?.length) return pick(r.data)
+    return null
   } catch {
     return null
   }
+}
+
+// Count of cases currently in the training set.
+export async function trainingCount() {
+  if (!supabase) return 0
+  const { count } = await supabase
+    .from('exam_questions')
+    .select('*', { count: 'exact', head: true })
+    .eq('is_active', true)
+    .eq('in_training', true)
+  return count || 0
 }
 
 export async function getQuestionById(id) {

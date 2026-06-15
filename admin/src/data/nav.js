@@ -7,6 +7,7 @@ import {
   FiBarChart2,
   FiCpu,
   FiSettings,
+  FiZap,
 } from 'react-icons/fi'
 
 export const navGroups = [
@@ -18,6 +19,7 @@ export const navGroups = [
     label: 'Manage',
     items: [
       { to: '/questions', label: 'Questions', icon: FiHelpCircle },
+      { to: '/training', label: 'Training Panel', icon: FiZap },
       { to: '/candidates', label: 'Candidates', icon: FiUsers },
       { to: '/sessions', label: 'Exam Sessions', icon: FiClipboard },
       { to: '/transcripts', label: 'Transcripts', icon: FiFileText },
@@ -39,6 +41,7 @@ export const navGroups = [
 export const pageMeta = {
   '/': { title: 'Dashboard', sub: 'Overview of your platform' },
   '/questions': { title: 'Question Bank', sub: 'Manage clinical exam questions' },
+  '/training': { title: 'Training Panel', sub: 'Curate the examiner’s training documents' },
   '/candidates': { title: 'Candidates', sub: 'Registered users & performance' },
   '/sessions': { title: 'Exam Sessions', sub: 'Completed & live AI sessions' },
   '/transcripts': { title: 'Transcripts', sub: 'Session conversation records' },

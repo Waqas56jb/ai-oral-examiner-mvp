@@ -6,7 +6,7 @@ import OpenAI from 'openai'
 import { config, getApiKey } from './config.js'
 import { buildExaminerInstructions, buildFeedbackUserPrompt, normalizeQuestion, SAMPLE_CASE } from './prompts/examiner.js'
 import { getRandomQuestion, getQuestionById, saveSession } from './db/repo.js'
-import { parseClinicalCase, jotformReady, listForms } from './integrations/jotform.js'
+import { parseClinicalCase, jotformReady, listCaseForms, deriveExamType } from './integrations/jotform.js'
 import { supabase } from './db/supabase.js'
 
 /**
@@ -118,8 +118,16 @@ app.post('/api/realtime/session', async (req, res) => {
   try {
     const { candidateName, examType = 'RACGP', questionId, formId } = req.body || {}
 
-    // Pull the case (Jotform formId > DB questionId > random DB > sample).
+    // Pull the case: explicit Jotform formId / questionId, else a random case
+    // FROM THE TRAINING SET ONLY (no hard-coded / untrained fallback).
     const rawCase = await resolveCase({ formId, questionId, examType })
+    if (!rawCase) {
+      return res.status(409).json({
+        maintenance: true,
+        error:
+          'Our AI examiner is currently being updated with new exam cases and is briefly unavailable. Please check back again shortly — thank you for your patience! 🙏',
+      })
+    }
     const question = normalizeQuestion(rawCase)
 
     const instructions = buildExaminerInstructions({
@@ -139,12 +147,15 @@ app.post('/api/realtime/session', async (req, res) => {
             transcription: { model: config.transcriptionModel },
             // Filter out background noise before it reaches the model.
             noise_reduction: { type: 'near_field' },
-            // Semantic VAD waits for a natural end-of-turn instead of
-            // reacting to every blip of background sound. interrupt_response is
-            // OFF so the examiner always finishes its question before listening.
+            // Patient server VAD: waits a full second of silence before deciding
+            // the candidate has finished, so it never cuts them off mid-sentence.
+            // interrupt_response is OFF so the examiner finishes its own turn
+            // smoothly (no choppy half-spoken sentences).
             turn_detection: {
-              type: 'semantic_vad',
-              eagerness: 'low',
+              type: 'server_vad',
+              threshold: 0.55,
+              prefix_padding_ms: 300,
+              silence_duration_ms: 1000,
               create_response: true,
               interrupt_response: false,
             },
@@ -405,44 +416,48 @@ async function requireAdmin(req, res, next) {
   }
 }
 
-// List Jotform clinical case forms available to import
+// List ALL Jotform clinical case forms available to import (paginated → thousands)
 app.get('/api/admin/jotform/forms', requireAdmin, async (_req, res) => {
   try {
-    const forms = await listForms({ limit: 200 })
-    const cases = forms.filter((f) => /case\s*[a-z]?\d/i.test(f.title))
-    res.json({ forms: cases })
+    const cases = await listCaseForms()
+    res.json({ forms: cases, total: cases.length })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
 })
 
-// Import selected forms (or all case forms) into the question bank
+// Import a BATCH of forms into the question bank.
+// Body: { forms: [{ id, title }] }  (preferred) or { formIds: [] }
+// The admin UI sends small batches and loops to import the whole bank.
 app.post('/api/admin/jotform/import', requireAdmin, async (req, res) => {
   try {
-    let ids = Array.isArray(req.body?.formIds) ? req.body.formIds.map(String) : []
-    if (!ids.length) {
-      const forms = await listForms({ limit: 200 })
-      ids = forms.filter((f) => /case\s*[a-z]?\d/i.test(f.title)).map((f) => String(f.id)).slice(0, 25)
+    let batch = []
+    if (Array.isArray(req.body?.forms)) {
+      batch = req.body.forms.map((f) => ({ id: String(f.id), title: f.title }))
+    } else if (Array.isArray(req.body?.formIds)) {
+      batch = req.body.formIds.map((id) => ({ id: String(id), title: null }))
     }
+    batch = batch.slice(0, 60) // safety cap per request (avoids serverless timeout)
+
     let imported = 0
     let updated = 0
     let failed = 0
-    for (const id of ids) {
+    for (const { id, title } of batch) {
       try {
-        const c = await parseClinicalCase(id)
+        const c = await parseClinicalCase(id, title)
         if (!c.scenario) {
           failed++
           continue
         }
         const row = {
           exam_type: deriveExamType(c.category, c.title),
-          external_ref: String(id),
+          external_ref: id,
           title: c.title,
           stem: c.scenario,
           marking_criteria: c.questions,
           is_active: true,
         }
-        const existing = await supabase.from('exam_questions').select('id').eq('external_ref', String(id)).maybeSingle()
+        const existing = await supabase.from('exam_questions').select('id').eq('external_ref', id).maybeSingle()
         if (existing.data?.id) {
           await supabase.from('exam_questions').update(row).eq('id', existing.data.id)
           await supabase.from('exam_questions').update({ model_answer: c.modelAnswers.join('\n\n') }).eq('id', existing.data.id)
@@ -460,19 +475,52 @@ app.post('/api/admin/jotform/import', requireAdmin, async (req, res) => {
         failed++
       }
     }
-    res.json({ imported, updated, failed, total: ids.length })
+    res.json({ imported, updated, failed, total: batch.length })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
 })
 
-function deriveExamType(category, title) {
-  const s = `${category || ''} ${title || ''}`.toUpperCase()
-  for (const t of ['RACGP', 'ACRRM', 'AMC', 'PESCI', 'NZREX', 'KFP', 'AKT']) {
-    if (s.includes(t)) return t
+// Admin: full question list (light fields) — service key, returns ALL rows
+app.get('/api/admin/questions', requireAdmin, async (_req, res) => {
+  try {
+    let all = []
+    let from = 0
+    while (true) {
+      const { data, error } = await supabase
+        .from('exam_questions')
+        .select('id, title, exam_type, in_training, is_active')
+        .order('title')
+        .range(from, from + 999)
+      if (error) return res.status(500).json({ error: error.message })
+      all = all.concat(data || [])
+      if (!data || data.length < 1000) break
+      from += 1000
+    }
+    res.json({ questions: all, total: all.length })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
   }
-  return category ? category.split(';')[0].trim() : 'RACGP'
-}
+})
+
+// Admin: push/remove a batch of cases into/out of the training set (persists via service key)
+app.post('/api/admin/training/set', requireAdmin, async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids : []
+    const value = Boolean(req.body?.in_training)
+    if (!ids.length) return res.json({ updated: 0 })
+    let updated = 0
+    for (let i = 0; i < ids.length; i += 500) {
+      const chunk = ids.slice(i, i + 500)
+      const { data, error } = await supabase.from('exam_questions').update({ in_training: value }).in('id', chunk).select('id')
+      if (error) return res.status(500).json({ error: error.message })
+      updated += data?.length || 0
+    }
+    res.json({ updated })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
 
 /* ------------------------------------------------------------------ */
 /*  ADMIN — self-service password reset (no email link)                */

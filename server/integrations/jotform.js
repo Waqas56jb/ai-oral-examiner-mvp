@@ -35,11 +35,41 @@ async function jf(path, { method = 'GET', body } = {}) {
 
 /* ---------------------------------- READ --------------------------------- */
 
-export async function listForms({ limit = 100 } = {}) {
-  const content = await jf(`/user/forms?limit=${limit}&orderby=created_at`)
-  return (content || [])
-    .filter((f) => f.status !== 'DELETED')
-    .map((f) => ({ id: f.id, title: f.title, count: Number(f.count) || 0, status: f.status }))
+// Fetch ALL forms via pagination (Jotform caps each request at 1000).
+export async function listForms({ pageSize = 1000, max = 50000 } = {}) {
+  const out = []
+  let offset = 0
+  while (offset < max) {
+    const content = await jf(`/user/forms?limit=${pageSize}&offset=${offset}&orderby=created_at`)
+    const batch = content || []
+    for (const f of batch) {
+      if (f.status !== 'DELETED') {
+        out.push({ id: f.id, title: f.title, count: Number(f.count) || 0, status: f.status })
+      }
+    }
+    if (batch.length < pageSize) break
+    offset += pageSize
+  }
+  return out
+}
+
+// A clinical case form (e.g. "Case L77", "NZ GP - MCQ- Case B361").
+export function isCaseForm(title) {
+  return /case\s*[a-z]?\d/i.test(title || '')
+}
+
+export async function listCaseForms() {
+  const forms = await listForms()
+  return forms.filter((f) => isCaseForm(f.title))
+}
+
+// Derive an exam pathway from the case category/title.
+export function deriveExamType(category, title) {
+  const s = `${category || ''} ${title || ''}`.toUpperCase()
+  for (const t of ['RACGP', 'ACRRM', 'AMC', 'PESCI', 'NZREX', 'FRANZCOG', 'KFP', 'AKT', 'CCE']) {
+    if (s.includes(t)) return t
+  }
+  return category ? category.split(';')[0].trim() : 'RACGP'
 }
 
 export async function getFormTitle(formId) {
@@ -75,8 +105,11 @@ const isQ = (t) => /^q\s*\d/i.test(t)
  *  { formId, title, category, scenario, questions[], modelAnswers[], hints }
  * The "model answers" / hints are examiner-only marking material.
  */
-export async function parseClinicalCase(formId) {
-  const [title, questions] = await Promise.all([getFormTitle(formId), getFormQuestions(formId)])
+export async function parseClinicalCase(formId, knownTitle) {
+  const [title, questions] = await Promise.all([
+    knownTitle != null ? Promise.resolve(knownTitle) : getFormTitle(formId),
+    getFormQuestions(formId),
+  ])
 
   const texts = questions
     .filter((q) => q.type === 'control_text')

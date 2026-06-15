@@ -20,11 +20,12 @@ const STATE_META = {
   speak:      { label: 'Examiner speaking',  status: 'Listen',         sub: 'The examiner is responding' },
   finishing:  { label: 'Wrapping up…',        status: 'Almost done',    sub: 'Generating your feedback report' },
   error:      { label: 'Connection issue',    status: 'Tap to retry',   sub: 'We couldn’t reach the examiner' },
+  maintenance:{ label: 'Just a moment',        status: 'Coming soon',    sub: 'The examiner is being prepared' },
 }
 
 // OrbCanvas / WaveRing only know idle|listen|think|speak — map the rest.
 const orbStateFor = (s) =>
-  s === 'connecting' || s === 'finishing' ? 'think' : s === 'error' ? 'idle' : s
+  s === 'connecting' || s === 'finishing' ? 'think' : s === 'error' || s === 'maintenance' ? 'idle' : s
 
 // Read ?formId=... (and optional ?exam=...) so a Kajabi/Jotform embed can tell
 // the examiner exactly which clinical case to run.
@@ -130,7 +131,7 @@ export default function VoiceAgent() {
       startTimer()
     } catch (err) {
       setErrorMsg(err.message || 'Could not start the session.')
-      setExamState('error')
+      setExamState(err.maintenance ? 'maintenance' : 'error')
       setRunning(false)
       startedRef.current = false
     }
@@ -184,7 +185,7 @@ export default function VoiceAgent() {
   }, [navigate, setSessionData])
 
   const onMicButton = useCallback(() => {
-    if (examState === 'idle' || examState === 'error') startSession()
+    if (examState === 'idle' || examState === 'error' || examState === 'maintenance') startSession()
     else if (running) toggleMute()
   }, [examState, running, startSession, toggleMute])
 
@@ -199,7 +200,7 @@ export default function VoiceAgent() {
   const meta     = STATE_META[examState] || STATE_META.idle
   const timeStr  = fmtTime(sessionSec)
   const isActive = examState === 'listen' || examState === 'speak'
-  const subText  = examState === 'speak' && liveCaption ? liveCaption : (errorMsg && examState === 'error' ? errorMsg : meta.sub)
+  const subText  = examState === 'speak' && liveCaption ? liveCaption : (errorMsg && (examState === 'error' || examState === 'maintenance') ? errorMsg : meta.sub)
 
   return (
     <div

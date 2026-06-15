@@ -6,6 +6,7 @@ import Login from './pages/Login'
 import ResetPassword from './pages/ResetPassword'
 import Dashboard from './pages/Dashboard'
 import Questions from './pages/Questions'
+import Training from './pages/Training'
 import Candidates from './pages/Candidates'
 import Sessions from './pages/Sessions'
 import Transcripts from './pages/Transcripts'
@@ -41,6 +42,7 @@ export default function App() {
       >
         <Route index element={<Dashboard />} />
         <Route path="questions" element={<Questions />} />
+        <Route path="training" element={<Training />} />
         <Route path="candidates" element={<Candidates />} />
         <Route path="sessions" element={<Sessions />} />
         <Route path="transcripts" element={<Transcripts />} />

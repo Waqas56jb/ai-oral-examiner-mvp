@@ -36,8 +36,18 @@ export async function startRealtimeExam({ candidateName = '', examType = 'RACGP'
     body: JSON.stringify({ candidateName, examType, formId }),
   })
   if (!tokenRes.ok) {
-    const detail = await safeText(tokenRes)
-    throw new Error(`Could not start session (${tokenRes.status}). Is the server running and OPENAI_API_KEY set? ${detail}`)
+    let msg = `Could not start the session (${tokenRes.status}).`
+    let maintenance = false
+    try {
+      const j = await tokenRes.json()
+      if (j?.error) msg = j.error
+      if (j?.maintenance) maintenance = true
+    } catch {
+      /* keep default */
+    }
+    const e = new Error(msg)
+    e.maintenance = maintenance
+    throw e
   }
   const session = await tokenRes.json()
   const ephemeralKey = session?.value || session?.client_secret?.value
@@ -47,8 +57,14 @@ export async function startRealtimeExam({ candidateName = '', examType = 'RACGP'
     throw new Error('Server did not return a valid realtime session token.')
   }
 
-  // 2) Peer connection
-  const pc = new RTCPeerConnection()
+  // 2) Peer connection — STUN servers greatly improve connection reliability
+  //    (NAT traversal) and reduce dropped/choppy audio.
+  const pc = new RTCPeerConnection({
+    iceServers: [
+      { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] },
+    ],
+    bundlePolicy: 'max-bundle',
+  })
 
   // Examiner audio playback
   const audioEl = new Audio()
@@ -143,13 +159,26 @@ export async function startRealtimeExam({ candidateName = '', examType = 'RACGP'
   const answer = { type: 'answer', sdp: await sdpRes.text() }
   await pc.setRemoteDescription(answer)
 
+  let stopped = false
   function cleanup() {
+    if (stopped) return
+    stopped = true
     if (dropTimer) {
       clearTimeout(dropTimer)
       dropTimer = null
     }
+    // Tell the model to stop generating, then immediately silence playback.
+    try {
+      if (dc.readyState === 'open') dc.send(JSON.stringify({ type: 'response.cancel' }))
+    } catch { /* noop */ }
     try {
       micStream?.getTracks().forEach((t) => t.stop())
+    } catch { /* noop */ }
+    // Stop the incoming examiner audio track(s)
+    try {
+      pc.getReceivers().forEach((r) => {
+        try { r.track && r.track.stop() } catch { /* noop */ }
+      })
     } catch { /* noop */ }
     try {
       dc.close()
@@ -157,7 +186,14 @@ export async function startRealtimeExam({ candidateName = '', examType = 'RACGP'
     try {
       pc.close()
     } catch { /* noop */ }
-    audioEl.srcObject = null
+    // Hard-stop the audio element so buffered speech stops instantly
+    try {
+      audioEl.pause()
+      audioEl.muted = true
+      audioEl.srcObject = null
+      audioEl.removeAttribute('src')
+      audioEl.load()
+    } catch { /* noop */ }
   }
 
   return {

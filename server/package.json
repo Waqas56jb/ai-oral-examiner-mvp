@@ -11,7 +11,8 @@
     "verify:jotform": "node integrations/verifyJotform.mjs",
     "seed": "node db/seed.mjs",
     "create:admin": "node db/createAdmin.mjs",
-    "db:run": "node db/runSql.mjs"
+    "db:run": "node db/runSql.mjs",
+    "import:jotform": "node db/importJotform.mjs"
   },
   "engines": {
     "node": ">=18"

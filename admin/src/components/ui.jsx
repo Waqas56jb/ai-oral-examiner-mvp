@@ -1,4 +1,28 @@
+import { useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { FiX, FiSearch, FiInbox } from 'react-icons/fi'
+
+/** Textarea that grows to fit its content (so long text is fully readable). */
+export function AutoTextarea({ value, onChange, maxHeight = 420, minHeight = 90, ...rest }) {
+  const ref = useRef(null)
+  const resize = () => {
+    const el = ref.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = Math.max(minHeight, Math.min(el.scrollHeight + 2, maxHeight)) + 'px'
+  }
+  useEffect(() => { resize() }) // re-size on every render (incl. when value loads)
+  return (
+    <textarea
+      ref={ref}
+      className="textarea"
+      value={value}
+      onChange={(e) => { onChange(e); resize() }}
+      style={{ overflowY: 'auto', resize: 'vertical' }}
+      {...rest}
+    />
+  )
+}
 
 export function Button({ children, variant = 'primary', size, icon, loading, className = '', ...rest }) {
   return (
@@ -89,7 +113,19 @@ export function EmptyState({ icon = <FiInbox />, title = 'Nothing here yet', tex
 }
 
 export function Modal({ title, onClose, children, footer, wide }) {
-  return (
+  // Lock background scroll while the modal is open.
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [])
+
+  // Render into <body> via a portal so position:fixed is relative to the
+  // viewport (not a transformed ancestor) — the modal always opens centered
+  // on screen, no matter how far the list is scrolled.
+  return createPortal(
     <div className="modal-backdrop" onClick={onClose}>
       <div className={`modal ${wide ? 'modal--wide' : ''}`} onClick={(e) => e.stopPropagation()}>
         <div className="modal__head">
@@ -99,7 +135,8 @@ export function Modal({ title, onClose, children, footer, wide }) {
         <div className="modal__body">{children}</div>
         {footer && <div className="modal__foot">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 

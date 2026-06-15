@@ -394,6 +394,23 @@ table.tbl { width: 100%; border-collapse: collapse; }
 @media (max-width: 900px) { .tpl-grid { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 620px) { .tpl-grid { grid-template-columns: repeat(2, 1fr); } }
 
+/* ---------------- Training panel ---------------- */
+.train-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+.train-col { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg); display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--sh-sm); }
+.train-col--active { border-color: rgba(99, 102, 241, 0.4); box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.06); }
+.train-col__head { padding: 16px 18px; border-bottom: 1px solid var(--line-2); }
+.train-col__title { display: flex; align-items: center; gap: 9px; font-family: var(--head); font-weight: 700; font-size: 1.02rem; color: var(--ink); }
+.train-col__title svg { color: var(--accent); }
+.train-col__count { font-size: 0.76rem; font-weight: 800; padding: 2px 10px; border-radius: 999px; background: var(--line-2); color: var(--muted); margin-left: auto; }
+.train-col__count.is-active { background: var(--grad); color: #fff; }
+.train-list { flex: 1; overflow-y: auto; max-height: 58vh; min-height: 200px; }
+.train-row { display: flex; align-items: center; gap: 9px; padding: 10px 14px; border-bottom: 1px solid var(--line-2); transition: background 0.14s; }
+.train-row:hover { background: #fafbfe; }
+.train-row__title { font-weight: 600; color: var(--ink); font-size: 0.88rem; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.train-col__foot { padding: 12px 16px; border-top: 1px solid var(--line-2); display: flex; gap: 10px; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+.train-empty { padding: 36px 20px; text-align: center; color: var(--muted); font-size: 0.9rem; }
+@media (max-width: 900px) { .train-grid { grid-template-columns: 1fr; } }
+
 .section-title { display: flex; align-items: center; gap: 10px; font-size: 1.15rem; margin-bottom: 4px; }
 .section-title__icon { width: 36px; height: 36px; border-radius: 10px; background: var(--grad); color: #fff; display: grid; place-items: center; font-size: 1rem; box-shadow: var(--sh-accent); }
 
