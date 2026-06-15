@@ -31,6 +31,42 @@ export async function getRandomQuestion(examType) {
   }
 }
 
+/**
+ * Build a category-aware pool from the training set:
+ *   { categories: [names...], cases: [one case per category] }
+ * The examiner uses this to tell the candidate which areas it can test, and to
+ * run a case from the area the candidate chooses.
+ */
+export async function getTrainingPool(maxCategories = 16) {
+  if (!supabase) return { categories: [], cases: [] }
+  try {
+    const { data } = await supabase
+      .from('exam_questions')
+      .select('id, title, exam_type, stem, marking_criteria')
+      .eq('is_active', true)
+      .eq('in_training', true)
+      .limit(3000)
+    if (!data?.length) return { categories: [], cases: [] }
+
+    const byCat = new Map()
+    for (const q of data) {
+      const cat = (q.exam_type || 'General').trim()
+      if (!byCat.has(cat)) byCat.set(cat, [])
+      byCat.get(cat).push(q)
+    }
+    const categories = [...byCat.keys()].sort()
+    // One random case per category, capped (keeps the prompt a sensible size)
+    const chosen = categories.slice(0, maxCategories)
+    const cases = chosen.map((cat) => {
+      const arr = byCat.get(cat)
+      return arr[Math.floor(Math.random() * arr.length)]
+    })
+    return { categories: chosen, cases, allCount: data.length }
+  } catch {
+    return { categories: [], cases: [] }
+  }
+}
+
 // Count of cases currently in the training set.
 export async function trainingCount() {
   if (!supabase) return 0

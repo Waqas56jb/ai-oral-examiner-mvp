@@ -4,8 +4,15 @@ import cors from 'cors'
 import OpenAI from 'openai'
 
 import { config, getApiKey } from './config.js'
-import { buildExaminerInstructions, buildFeedbackUserPrompt, normalizeQuestion, SAMPLE_CASE } from './prompts/examiner.js'
-import { getRandomQuestion, getQuestionById, saveSession } from './db/repo.js'
+import {
+  buildExaminerInstructions,
+  buildPoolInstructions,
+  buildGraderSystem,
+  buildFeedbackUserPrompt,
+  normalizeQuestion,
+  SAMPLE_CASE,
+} from './prompts/examiner.js'
+import { getRandomQuestion, getQuestionById, getTrainingPool, saveSession } from './db/repo.js'
 import { parseClinicalCase, jotformReady, listCaseForms, deriveExamType } from './integrations/jotform.js'
 import { supabase } from './db/supabase.js'
 
@@ -109,6 +116,9 @@ app.get('/api/widget-theme', async (_req, res) => {
   }
 })
 
+const MAINTENANCE_MSG =
+  'Our AI examiner is currently being updated with new exam cases and is briefly unavailable. Please check back again shortly — thank you for your patience! 🙏'
+
 /* ------------------------------------------------------------------ */
 /*  Realtime voice — mint a short-lived ephemeral token                */
 /*  The browser uses this token to open a WebRTC connection directly   */
@@ -118,24 +128,29 @@ app.post('/api/realtime/session', async (req, res) => {
   try {
     const { candidateName, examType = '', questionId, formId } = req.body || {}
 
-    // Pull the case: explicit Jotform formId / questionId, else a random case
-    // FROM THE TRAINING SET ONLY (no hard-coded / untrained fallback).
-    const rawCase = await resolveCase({ formId, questionId, examType })
-    if (!rawCase) {
-      return res.status(409).json({
-        maintenance: true,
-        error:
-          'Our AI examiner is currently being updated with new exam cases and is briefly unavailable. Please check back again shortly — thank you for your patience! 🙏',
-      })
+    let instructions
+    let meta
+    if (formId || questionId) {
+      // Explicit single case (e.g. a per-page Jotform/case embed)
+      const rawCase = await resolveCase({ formId, questionId, examType })
+      if (!rawCase) return res.status(409).json({ maintenance: true, error: MAINTENANCE_MSG })
+      const question = normalizeQuestion(rawCase)
+      instructions = buildExaminerInstructions({ examType: question.examType, candidateName, forVoice: true, question: rawCase })
+      meta = {
+        questionId: question.source === 'db' ? question.id : null,
+        formId: formId || null,
+        questionTitle: question.title || null,
+        examType: question.examType,
+        categories: [],
+      }
+    } else {
+      // Adaptive, category-aware session across the whole training set:
+      // the examiner knows the available areas and runs the candidate's choice.
+      const pool = await getTrainingPool()
+      if (!pool.cases.length) return res.status(409).json({ maintenance: true, error: MAINTENANCE_MSG })
+      instructions = buildPoolInstructions({ categories: pool.categories, cases: pool.cases, candidateName, forVoice: true })
+      meta = { questionId: null, formId: null, questionTitle: 'Adaptive training session', examType: '', categories: pool.categories }
     }
-    const question = normalizeQuestion(rawCase)
-
-    const instructions = buildExaminerInstructions({
-      examType: question.examType,
-      candidateName,
-      forVoice: true,
-      question: rawCase,
-    })
 
     const sessionBody = JSON.stringify({
       session: {
@@ -196,10 +211,7 @@ app.post('/api/realtime/session', async (req, res) => {
       model: data.session?.model || config.realtimeModel,
       webrtcUrl: config.realtimeCallsUrl,
       expires_at: data.expires_at,
-      questionId: question.source === 'db' ? question.id : null,
-      formId: formId || null,
-      questionTitle: question.title || null,
-      examType: question.examType,
+      ...meta,
     })
   } catch (err) {
     console.error('Realtime session exception:', err)
@@ -272,10 +284,13 @@ app.post('/api/feedback', async (req, res) => {
   const { transcript = [], examType = '', questionId, formId, durationSec = 0, save = true } = req.body || {}
 
   try {
-    const rawCase = await resolveCase({ formId, questionId, examType })
+    const rawCase = questionId || formId ? await resolveCase({ formId, questionId, examType }) : null
     const question = normalizeQuestion(rawCase)
 
-    const systemPrompt = buildExaminerInstructions({ examType, forVoice: false, question: rawCase })
+    // Single-case sessions grade against the case; adaptive sessions grade from the transcript.
+    const systemPrompt = rawCase
+      ? buildExaminerInstructions({ examType, forVoice: false, question: rawCase })
+      : buildGraderSystem()
     const userPrompt = buildFeedbackUserPrompt(transcript)
 
     const completion = await chatCreate({
@@ -304,8 +319,8 @@ app.post('/api/feedback', async (req, res) => {
       const wordCount = list.reduce((n, t) => n + String(t.text || '').split(/\s+/).filter(Boolean).length, 0)
       const questionsAnswered = list.filter((t) => t.role === 'examiner').length
       const saved = await saveSession({
-        questionId: question.id || null,
-        examType: question.examType || examType || 'General',
+        questionId: rawCase ? question.id || null : null,
+        examType: (rawCase ? question.examType : examType) || 'General',
         durationSec,
         questionsAnswered,
         wordCount,
