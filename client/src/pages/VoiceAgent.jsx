@@ -8,7 +8,9 @@ import { WIDGET_THEMES, DEFAULT_THEME } from '../services/widgetThemes'
 import './VoiceAgent.css'
 import '../styles/widgetTheme.css'
 
-const EXAM_TYPE = 'RACGP'
+// Empty = let the examiner pick ANY case from the training set (its own
+// category is used). A specific category can be forced via ?exam=...
+const EXAM_TYPE = ''
 
 const BAR_HEIGHTS = [4,7,12,18,26,34,40,42,38,30,22,16,12,9,16,24,34,42,40,34,26,18,12,7,5,4,8,11]
 
@@ -125,7 +127,7 @@ export default function VoiceAgent() {
         },
       })
       sessionRef.current = session
-      questionRef.current = { id: session.questionId, formId: session.formId, title: session.questionTitle }
+      questionRef.current = { id: session.questionId, formId: session.formId, title: session.questionTitle, examType: session.examType }
       setRunning(true)
       setMuted(false)
       startTimer()
@@ -161,7 +163,7 @@ export default function VoiceAgent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           transcript: transcriptRef.current,
-          examType: params.exam,
+          examType: questionRef.current.examType || params.exam,
           questionId: questionRef.current.id,
           formId: questionRef.current.formId,
           durationSec: sessionSecRef.current,
@@ -176,7 +178,7 @@ export default function VoiceAgent() {
       wordCount:         wordCountRef.current,
       avgConfidence:     feedback?.score ?? 72,
       questionTitle:     questionRef.current.title || 'Clinical case',
-      examType:          params.exam,
+      examType:          questionRef.current.examType || params.exam || 'General',
       feedback,
       transcript:        transcriptRef.current,
       date:              new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }),

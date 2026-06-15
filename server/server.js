@@ -116,7 +116,7 @@ app.get('/api/widget-theme', async (_req, res) => {
 /* ------------------------------------------------------------------ */
 app.post('/api/realtime/session', async (req, res) => {
   try {
-    const { candidateName, examType = 'RACGP', questionId, formId } = req.body || {}
+    const { candidateName, examType = '', questionId, formId } = req.body || {}
 
     // Pull the case: explicit Jotform formId / questionId, else a random case
     // FROM THE TRAINING SET ONLY (no hard-coded / untrained fallback).
@@ -269,7 +269,7 @@ app.post('/api/chat', async (req, res) => {
 /*  Body: { transcript: [{ role, text }], examType? }                   */
 /* ------------------------------------------------------------------ */
 app.post('/api/feedback', async (req, res) => {
-  const { transcript = [], examType = 'RACGP', questionId, formId, durationSec = 0, save = true } = req.body || {}
+  const { transcript = [], examType = '', questionId, formId, durationSec = 0, save = true } = req.body || {}
 
   try {
     const rawCase = await resolveCase({ formId, questionId, examType })
@@ -305,7 +305,7 @@ app.post('/api/feedback', async (req, res) => {
       const questionsAnswered = list.filter((t) => t.role === 'examiner').length
       const saved = await saveSession({
         questionId: question.id || null,
-        examType,
+        examType: question.examType || examType || 'General',
         durationSec,
         questionsAnswered,
         wordCount,

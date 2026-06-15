@@ -7,21 +7,23 @@ import { supabase } from './supabase.js'
  */
 // ONLY returns questions the admin has pushed into the training set.
 // No hard-coded / sample / untrained fallback — null means "nothing trained yet".
-export async function getRandomQuestion(examType = 'RACGP') {
+export async function getRandomQuestion(examType) {
   if (!supabase) return null
   const pick = (rows) => (rows && rows.length ? rows[Math.floor(Math.random() * rows.length)] : null)
   try {
-    // 1) Training set for this exam type
-    let r = await supabase
-      .from('exam_questions')
-      .select('*')
-      .eq('is_active', true)
-      .eq('in_training', true)
-      .eq('exam_type', examType)
-      .limit(500)
-    if (!r.error && r.data?.length) return pick(r.data)
-    // 2) Any case in the training set (any type)
-    r = await supabase.from('exam_questions').select('*').eq('is_active', true).eq('in_training', true).limit(500)
+    // 1) If a SPECIFIC exam type/category is requested, prefer it (within training set)
+    if (examType) {
+      const r = await supabase
+        .from('exam_questions')
+        .select('*')
+        .eq('is_active', true)
+        .eq('in_training', true)
+        .eq('exam_type', examType)
+        .limit(500)
+      if (!r.error && r.data?.length) return pick(r.data)
+    }
+    // 2) Otherwise: ANY case in the training set (its own category is used, NOT RACGP)
+    const r = await supabase.from('exam_questions').select('*').eq('is_active', true).eq('in_training', true).limit(1000)
     if (!r.error && r.data?.length) return pick(r.data)
     return null
   } catch {
