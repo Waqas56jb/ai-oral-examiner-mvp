@@ -215,19 +215,18 @@ export async function startRealtimeExam({ candidateName = '', examType = 'RACGP'
 function handleEvent(msg, h, state) {
   const type = msg.type || ''
 
-  // Turn-taking / state.
-  // While the examiner is speaking/thinking we IGNORE input VAD events so that
-  // stray noise or speaker echo can't flip the UI to "listening" or break flow.
+  // Turn-taking. Barge-in is enabled: when the candidate starts speaking we
+  // switch to listening even if the examiner was mid-sentence (echo cancellation
+  // on the mic prevents the examiner's own voice from triggering this).
   if (type === 'input_audio_buffer.speech_started') {
-    if (!state.assistantActive) h.onState('listen')
+    state.assistantActive = false
+    h.onState('listen')
     return
   }
   if (type === 'input_audio_buffer.speech_stopped') {
-    if (!state.assistantActive) {
-      state.thinkAt = performance.now()
-      state.awaitingFirstAudio = true
-      h.onState('think')
-    }
+    state.thinkAt = performance.now()
+    state.awaitingFirstAudio = true
+    h.onState('think')
     return
   }
   if (type === 'response.created') {

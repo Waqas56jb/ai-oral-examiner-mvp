@@ -4,11 +4,9 @@ import {
 } from 'react-icons/fi'
 import { supabase } from '../lib/supabase'
 import { apiGet, apiPost } from '../lib/api'
-import { Card, Button, IconButton, Badge, Search, EmptyState, PageLoader, Modal, Field, AutoTextarea } from '../components/ui'
+import { Card, Button, IconButton, Badge, Search, EmptyState, PageLoader, Modal } from '../components/ui'
+import QuestionForm, { rowToForm, formToPayload, blankQuestion } from '../components/QuestionForm'
 import { fmtDate, toCsv, downloadFile } from '../lib/format'
-
-const EXAM_TYPES = ['RACGP', 'ACRRM', 'AMC', 'PESCI', 'NZREX', 'KFP', 'AKT']
-const blank = { title: '', exam_type: 'RACGP', stem: '', vitals: '', marking_criteria: '', model_answer: '', is_active: true }
 
 export default function Questions() {
   const [rows, setRows] = useState([])
@@ -23,8 +21,21 @@ export default function Questions() {
 
   const load = async () => {
     setLoading(true)
-    const { data } = await supabase.from('exam_questions').select('*').order('created_at', { ascending: false })
-    setRows(data || [])
+    // Paginate (Supabase caps each request at 1000) so ALL questions load.
+    let all = []
+    let from = 0
+    while (true) {
+      const { data, error } = await supabase
+        .from('exam_questions')
+        .select('id, title, exam_type, is_active, external_ref, marking_criteria')
+        .order('title')
+        .range(from, from + 999)
+      if (error || !data) break
+      all = all.concat(data)
+      if (data.length < 1000) break
+      from += 1000
+    }
+    setRows(all)
     setLoading(false)
   }
   useEffect(() => { load() }, [])
@@ -44,20 +55,11 @@ export default function Questions() {
     })
   }, [rows, q, cat])
 
-  const openNew = () => setEditing({ form: { ...blank }, id: null })
-  const openEdit = (r) =>
-    setEditing({
-      id: r.id,
-      form: {
-        title: r.title || '',
-        exam_type: r.exam_type || 'RACGP',
-        stem: r.stem || '',
-        vitals: r.vitals || '',
-        marking_criteria: (r.marking_criteria || []).join('\n'),
-        model_answer: r.model_answer || '',
-        is_active: r.is_active,
-      },
-    })
+  const openNew = () => setEditing({ form: { ...blankQuestion }, id: null })
+  const openEdit = async (r) => {
+    const { data } = await supabase.from('exam_questions').select('*').eq('id', r.id).single()
+    setEditing({ id: r.id, form: rowToForm(data || r) })
+  }
 
   const save = async () => {
     const f = editing.form
@@ -67,23 +69,12 @@ export default function Questions() {
     }
     setSaving(true)
     setError('')
-    const payload = {
-      title: f.title.trim(),
-      exam_type: f.exam_type,
-      stem: f.stem.trim(),
-      vitals: f.vitals.trim(),
-      marking_criteria: f.marking_criteria.split('\n').map((s) => s.trim()).filter(Boolean),
-      is_active: f.is_active,
-    }
+    const payload = formToPayload(f)
     let err
     if (editing.id) {
-      const r1 = await supabase.from('exam_questions').update(payload).eq('id', editing.id)
-      err = r1.error
-      await supabase.from('exam_questions').update({ model_answer: f.model_answer }).eq('id', editing.id)
+      err = (await supabase.from('exam_questions').update(payload).eq('id', editing.id)).error
     } else {
-      const ins = await supabase.from('exam_questions').insert(payload).select('id').single()
-      err = ins.error
-      if (!err && ins.data) await supabase.from('exam_questions').update({ model_answer: f.model_answer }).eq('id', ins.data.id)
+      err = (await supabase.from('exam_questions').insert(payload).select('id').single()).error
     }
     setSaving(false)
     if (err) { setError(err.message); return }
@@ -186,29 +177,11 @@ export default function Questions() {
           }
         >
           {error && <div className="alert alert--error"><FiAlertCircle /> {error}</div>}
-          <div className="grid grid-2" style={{ gap: 16 }}>
-            <Field label="Case title">
-              <input className="input" value={editing.form.title} onChange={(e) => setEditing((s) => ({ ...s, form: { ...s.form, title: e.target.value } }))} placeholder="Acute chest pain…" />
-            </Field>
-            <Field label="Exam type">
-              <select className="select" value={editing.form.exam_type} onChange={(e) => setEditing((s) => ({ ...s, form: { ...s.form, exam_type: e.target.value } }))}>
-                {EXAM_TYPES.map((t) => <option key={t}>{t}</option>)}
-              </select>
-            </Field>
-          </div>
-          <Field label="Clinical scenario (presented to the candidate)">
-            <AutoTextarea value={editing.form.stem} onChange={(e) => setEditing((s) => ({ ...s, form: { ...s.form, stem: e.target.value } }))} maxHeight={460} minHeight={120} placeholder="A 54-year-old man presents with…" />
-          </Field>
-          <Field label="Tasks / questions to ask (one per line)">
-            <AutoTextarea value={editing.form.marking_criteria} onChange={(e) => setEditing((s) => ({ ...s, form: { ...s.form, marking_criteria: e.target.value } }))} maxHeight={360} placeholder={'Take a focused history\nExplain the diagnosis\nDiscuss management'} />
-          </Field>
-          <Field label="Model answer / marking key (examiner only — never shown to candidate)">
-            <AutoTextarea value={editing.form.model_answer} onChange={(e) => setEditing((s) => ({ ...s, form: { ...s.form, model_answer: e.target.value } }))} maxHeight={320} placeholder="Reference answer used by the AI to grade…" />
-          </Field>
-          <label className="auth-check">
-            <input type="checkbox" checked={editing.form.is_active} onChange={(e) => setEditing((s) => ({ ...s, form: { ...s.form, is_active: e.target.checked } }))} />
-            Active (available to candidates)
-          </label>
+          <QuestionForm
+            form={editing.form}
+            set={(k, v) => setEditing((s) => ({ ...s, form: { ...s.form, [k]: v } }))}
+            categories={cats.filter((c) => c !== 'All')}
+          />
         </Modal>
       )}
 

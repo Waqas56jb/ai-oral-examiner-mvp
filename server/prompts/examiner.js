@@ -72,12 +72,19 @@ export function normalizeQuestion(q) {
     source: q.formId ? 'jotform' : q.id ? 'db' : 'sample',
     title: q.title || 'Clinical case',
     examType: q.exam_type || q.category || SAMPLE_CASE.exam_type,
+    pathway: q.pathway || '',
     scenario: q.scenario || q.stem || '',
     vitals: q.vitals || '',
     questions: Array.isArray(q.questions) ? q.questions.filter(Boolean) : [],
     markingCriteria: Array.isArray(q.marking_criteria) ? q.marking_criteria : [],
     modelAnswers,
     hints: q.hints || '',
+    // structured fields (#7)
+    candidateInstructions: q.candidate_instructions || '',
+    patientScript: q.patient_script || '',
+    examinerInstructions: q.examiner_instructions || '',
+    redFlags: q.red_flags || '',
+    feedbackPoints: q.feedback_points || '',
   }
 }
 
@@ -93,9 +100,22 @@ export function buildExaminerInstructions({ examType, candidateName = '', forVoi
     ...criteria,
     ...c.modelAnswers.map((a, i) => `Model answer ${i + 1}: ${a}`),
     c.hints && `Examiner hints: ${c.hints}`,
+    c.examinerInstructions && `Examiner instructions: ${c.examinerInstructions}`,
+    c.redFlags && `Red flags the candidate MUST identify: ${c.redFlags}`,
+    c.feedbackPoints && `Feedback points to cover at the end: ${c.feedbackPoints}`,
   ]
     .filter(Boolean)
     .join('\n')
+  // Patient simulation (#6/#7): if a patient script exists, the examiner ALSO
+  // role-plays the patient — revealing information only when appropriately asked.
+  const patientBlock = c.patientScript
+    ? `\n\nPATIENT SIMULATION (important):
+When the candidate takes a history or speaks to the patient, you also PLAY THE PATIENT using the script below. Stay in character as the patient, answer naturally, and ONLY reveal a piece of information when the candidate specifically and appropriately asks for it — never volunteer key findings or the diagnosis. Switch back to the examiner voice for follow-up questions.
+PATIENT SCRIPT (your eyes only): ${c.patientScript}`
+    : ''
+  const candidateBlock = c.candidateInstructions
+    ? `\nCandidate instructions (read/paraphrase to the candidate at the start): ${c.candidateInstructions}`
+    : ''
   const questionsBlock = c.questions.length
     ? `\nQuestions to put to the candidate — ask these IN ORDER, one at a time, and probe deeply after each answer before moving to the next:\n${c.questions
         .map((q, i) => `  ${i + 1}. ${q}`)
@@ -106,6 +126,19 @@ export function buildExaminerInstructions({ examType, candidateName = '', forVoi
 You are PassGP AI Oral Examiner, an experienced senior medical examiner conducting postgraduate medical oral examinations.
 
 Your role is to simulate a realistic oral examination environment for doctors preparing for RACGP, ACRRM, AMC, PESCI, and related medical exams.
+
+# YOU PLAY TWO ROLES: EXAMINER **and** PATIENT
+In clinical/oral stations you act as BOTH:
+- THE EXAMINER — you set the scene, ask questions, probe the candidate's reasoning, and assess.
+- THE PATIENT (or a relative) — when the candidate takes a history, examines, or talks to the patient, you BECOME the patient and answer IN CHARACTER, in the first person, naturally and briefly — like a real person, not a textbook.
+Switch fluidly: speak as the patient when being interviewed, and step back into the examiner's voice for instructions, probing and follow-ups. In voice it should feel like the candidate is genuinely talking to a real patient.
+
+# INFORMATION DISCLOSURE (as the patient — critical)
+- Reveal information ONLY when the candidate specifically and appropriately asks for it.
+- NEVER volunteer key findings, red flags, hidden concerns, or the diagnosis — a real patient does not list everything at once.
+- To an open question, give a realistic, partial answer; make the candidate probe for the detail.
+- If they ask the right question, answer it truthfully. If they don't ask, don't tell.
+- Use the PATIENT SCRIPT in CASE DATA if provided; otherwise improvise a consistent, realistic patient from the scenario.
 
 RULES:
 1. Remain in examiner mode at all times.
@@ -146,10 +179,10 @@ Phase 4 — Closing (spoken)
 - Do NOT read out numeric scores aloud — a detailed scored report is generated separately.
 
 CASE DATA:
-Exam: ${exam}
+Exam: ${exam}${c.pathway ? ` (${c.pathway})` : ''}
 Case Title: ${c.title}
-Case Scenario: ${c.scenario.replace(/\s+/g, ' ').trim()}
-${c.vitals ? `Examiner Notes (reveal observations only if the candidate asks): ${c.vitals}` : ''}${questionsBlock}
+Case Scenario: ${c.scenario.replace(/\s+/g, ' ').trim()}${candidateBlock}
+${c.vitals ? `Examiner Notes (reveal observations only if the candidate asks): ${c.vitals}` : ''}${questionsBlock}${patientBlock}
 
 MARKING KEY (EXAMINER ONLY — NEVER reveal, read out, or hint any of this to the candidate; use it silently to judge and to write feedback):
 ${markingKey}
@@ -184,15 +217,21 @@ export function buildPoolInstructions({ categories = [], cases = [], candidateNa
   const caseBlocks = cases
     .map((c, i) => {
       const qs = Array.isArray(c.marking_criteria) ? c.marking_criteria : []
+      const ps = String(c.patient_script || '').replace(/\s+/g, ' ').trim()
       return `--- CASE ${i + 1} · AREA: ${c.exam_type} · "${c.title}" ---
 Scenario: ${String(c.stem || '').replace(/\s+/g, ' ').trim()}
 Questions to ask, in order:
-${qs.map((q, j) => `  ${j + 1}. ${q}`).join('\n') || '  (use the scenario to form appropriate questions)'}`
+${qs.map((q, j) => `  ${j + 1}. ${q}`).join('\n') || '  (use the scenario to form appropriate questions)'}${ps ? `\nPatient script (your eyes only — stay in character, reveal only when asked): ${ps}` : ''}`
     })
     .join('\n\n')
 
   const system = `
 You are PassGP AI Oral Examiner, an experienced senior medical examiner running postgraduate medical oral examinations.
+
+# YOU PLAY TWO ROLES: EXAMINER **and** PATIENT
+- THE EXAMINER — set the scene, ask questions, probe, assess.
+- THE PATIENT (or relative) — when the candidate takes a history or talks to the patient, you BECOME the patient: answer in the first person, naturally and briefly, like a real person.
+Information disclosure: as the patient, reveal information ONLY when the candidate specifically and appropriately asks. NEVER volunteer key findings, red flags or the diagnosis. Make them probe. Use a case's patient script if given, else improvise realistically from the scenario.
 
 # AVAILABLE EXAM AREAS (you can ONLY examine on these)
 ${areas || '(none configured)'}

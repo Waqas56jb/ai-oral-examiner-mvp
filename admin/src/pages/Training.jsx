@@ -4,10 +4,8 @@ import {
 } from 'react-icons/fi'
 import { supabase } from '../lib/supabase'
 import { apiGet, apiPost } from '../lib/api'
-import { Card, Button, IconButton, Badge, Search, EmptyState, PageLoader, Modal, Field, AutoTextarea } from '../components/ui'
-
-const EXAM_TYPES = ['RACGP', 'ACRRM', 'AMC', 'PESCI', 'NZREX', 'FRANZCOG', 'KFP', 'AKT', 'CCE']
-const blank = { title: '', exam_type: 'RACGP', stem: '', vitals: '', marking_criteria: '', model_answer: '', is_active: true }
+import { Card, Button, IconButton, Badge, Search, EmptyState, PageLoader, Modal } from '../components/ui'
+import QuestionForm, { rowToForm, formToPayload, blankQuestion } from '../components/QuestionForm'
 
 export default function Training() {
   const [docs, setDocs] = useState(null)
@@ -101,33 +99,20 @@ export default function Training() {
   const view = async (d) => setViewing((await fetchFull(d.id)) || d)
   const openEdit = async (d) => {
     const data = await fetchFull(d.id)
-    setEditing({
-      id: d.id,
-      form: {
-        title: data.title || '', exam_type: data.exam_type || 'RACGP', stem: data.stem || '',
-        vitals: data.vitals || '', marking_criteria: (data.marking_criteria || []).join('\n'),
-        model_answer: data.model_answer || '', is_active: data.is_active,
-      },
-    })
+    setEditing({ id: d.id, form: rowToForm(data) })
   }
-  const openAdd = () => setEditing({ id: null, form: { ...blank } })
+  const openAdd = () => setEditing({ id: null, form: { ...blankQuestion } })
 
   const saveDoc = async () => {
     const f = editing.form
     if (!f.title.trim() || !f.stem.trim()) { setError('Title and scenario are required.'); return }
     setBusy(true); setError('')
-    const payload = {
-      title: f.title.trim(), exam_type: f.exam_type, stem: f.stem.trim(), vitals: f.vitals.trim(),
-      marking_criteria: f.marking_criteria.split('\n').map((s) => s.trim()).filter(Boolean), is_active: f.is_active,
-    }
+    const payload = formToPayload(f)
     let err
     if (editing.id) {
       err = (await supabase.from('exam_questions').update(payload).eq('id', editing.id)).error
-      await supabase.from('exam_questions').update({ model_answer: f.model_answer }).eq('id', editing.id)
     } else {
-      const ins = await supabase.from('exam_questions').insert({ ...payload, in_training: true }).select('id').single()
-      err = ins.error
-      if (!err && ins.data) await supabase.from('exam_questions').update({ model_answer: f.model_answer }).eq('id', ins.data.id)
+      err = (await supabase.from('exam_questions').insert({ ...payload, in_training: true }).select('id').single()).error
     }
     setBusy(false)
     if (err) { setError(err.message); return }
@@ -235,14 +220,11 @@ export default function Training() {
         <Modal wide title={editing.id ? 'Edit document' : 'New document'} onClose={() => { setEditing(null); setError('') }}
           footer={<><Button variant="ghost" onClick={() => { setEditing(null); setError('') }}>Cancel</Button><Button loading={busy} icon={<FiCheck />} onClick={saveDoc}>Save</Button></>}>
           {error && <div className="alert alert--error"><FiAlertCircle /> {error}</div>}
-          <div className="grid grid-2" style={{ gap: 16 }}>
-            <Field label="Case title"><input className="input" value={editing.form.title} onChange={(e) => setEditing((s) => ({ ...s, form: { ...s.form, title: e.target.value } }))} /></Field>
-            <Field label="Exam / category"><select className="select" value={editing.form.exam_type} onChange={(e) => setEditing((s) => ({ ...s, form: { ...s.form, exam_type: e.target.value } }))}>{EXAM_TYPES.map((t) => <option key={t}>{t}</option>)}</select></Field>
-          </div>
-          <Field label="Clinical scenario (presented to the candidate)"><AutoTextarea value={editing.form.stem} onChange={(e) => setEditing((s) => ({ ...s, form: { ...s.form, stem: e.target.value } }))} maxHeight={420} minHeight={120} /></Field>
-          <Field label="Tasks / questions to ask (one per line)"><AutoTextarea value={editing.form.marking_criteria} onChange={(e) => setEditing((s) => ({ ...s, form: { ...s.form, marking_criteria: e.target.value } }))} maxHeight={340} /></Field>
-          <Field label="Model answer / marking key (examiner only)"><AutoTextarea value={editing.form.model_answer} onChange={(e) => setEditing((s) => ({ ...s, form: { ...s.form, model_answer: e.target.value } }))} maxHeight={300} /></Field>
-          <label className="auth-check"><input type="checkbox" checked={editing.form.is_active} onChange={(e) => setEditing((s) => ({ ...s, form: { ...s.form, is_active: e.target.checked } }))} /> Active</label>
+          <QuestionForm
+            form={editing.form}
+            set={(k, v) => setEditing((s) => ({ ...s, form: { ...s.form, [k]: v } }))}
+            categories={cats.filter((c) => c !== 'All')}
+          />
         </Modal>
       )}
 

@@ -42,7 +42,7 @@ export async function getTrainingPool(maxCategories = 16) {
   try {
     const { data } = await supabase
       .from('exam_questions')
-      .select('id, title, exam_type, stem, marking_criteria')
+      .select('id, title, exam_type, stem, marking_criteria, patient_script')
       .eq('is_active', true)
       .eq('in_training', true)
       .limit(3000)

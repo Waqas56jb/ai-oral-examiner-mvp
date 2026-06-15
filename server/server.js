@@ -162,17 +162,18 @@ app.post('/api/realtime/session', async (req, res) => {
             transcription: { model: config.transcriptionModel },
             // Filter out background noise before it reaches the model.
             noise_reduction: { type: 'near_field' },
-            // Patient server VAD: waits a full second of silence before deciding
-            // the candidate has finished, so it never cuts them off mid-sentence.
-            // interrupt_response is OFF so the examiner finishes its own turn
-            // smoothly (no choppy half-spoken sentences).
+            // Server VAD tuned for natural conversation:
+            //  - silence_duration 800ms → patient with the candidate's pauses
+            //  - interrupt_response: true → the candidate can naturally INTERRUPT
+            //    and talk over the examiner (#21). Echo cancellation on the mic
+            //    keeps the examiner from interrupting itself.
             turn_detection: {
               type: 'server_vad',
-              threshold: 0.55,
+              threshold: 0.5,
               prefix_padding_ms: 300,
-              silence_duration_ms: 1000,
+              silence_duration_ms: 800,
               create_response: true,
-              interrupt_response: false,
+              interrupt_response: true,
             },
           },
           output: { voice: await activeVoice(), speed: 1.0 },
