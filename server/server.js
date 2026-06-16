@@ -13,6 +13,7 @@ import {
   SAMPLE_CASE,
 } from './prompts/examiner.js'
 import { getRandomQuestion, getQuestionById, getTrainingPool, getCircuit, saveSession } from './db/repo.js'
+import { sendSessionSummary } from './email.js'
 import { parseClinicalCase, jotformReady, listCaseForms, deriveExamType } from './integrations/jotform.js'
 import { supabase } from './db/supabase.js'
 
@@ -367,6 +368,16 @@ app.post('/api/feedback', async (req, res) => {
         transcript,
       })
       sessionId = saved?.id || null
+
+      // Fire-and-forget: email the candidate (and optionally admin) their summary (#14).
+      if (candidateEmail && candidateEmail.trim()) {
+        sendSessionSummary({
+          candidateEmail: candidateEmail.trim(),
+          candidateName: (candidateName && candidateName.trim()) || report.candidate_name || '',
+          examType: (rawCase ? question.examType : examType) || 'Clinical case',
+          report,
+        }).catch(() => {})
+      }
     }
 
     res.json({ ...report, sessionId })

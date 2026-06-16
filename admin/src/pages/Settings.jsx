@@ -16,6 +16,8 @@ export default function Settings() {
   const [theme, setTheme] = useState(defaultWidgetTheme)
   const [fallbackKey, setFallbackKey] = useState('')
   const [showKey, setShowKey] = useState(false)
+  const [email, setEmail] = useState({ enabled: false, apiKey: '', from: '', sendToCandidate: true, ccAdmin: false, adminEmail: '' })
+  const [showEmailKey, setShowEmailKey] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -39,12 +41,13 @@ export default function Settings() {
 
   useEffect(() => {
     ;(async () => {
-      const { data } = await supabase.from('app_settings').select('key, value').in('key', ['integrations', 'widget_theme', 'openai_fallback'])
+      const { data } = await supabase.from('app_settings').select('key, value').in('key', ['integrations', 'widget_theme', 'openai_fallback', 'email_config'])
       const map = {}
       ;(data || []).forEach((r) => (map[r.key] = r.value))
       if (map.integrations) setIntegrations((s) => ({ ...s, ...map.integrations }))
       if (map.widget_theme?.template) setTheme(map.widget_theme.template)
       if (map.openai_fallback?.key) setFallbackKey(map.openai_fallback.key)
+      if (map.email_config) setEmail((s) => ({ ...s, ...map.email_config }))
       setLoading(false)
     })()
   }, [])
@@ -56,6 +59,7 @@ export default function Settings() {
       { key: 'integrations', value: integrations, updated_at: now },
       { key: 'widget_theme', value: { template: theme }, updated_at: now },
       { key: 'openai_fallback', value: { key: fallbackKey.trim() }, updated_at: now },
+      { key: 'email_config', value: { ...email, apiKey: email.apiKey.trim(), from: email.from.trim(), adminEmail: email.adminEmail.trim() }, updated_at: now },
     ])
     setSaving(false)
     if (error) setError(error.message)
@@ -128,6 +132,47 @@ export default function Settings() {
         </div>
         <div className="alert alert--success" style={{ marginTop: 14 }}>
           <FiShield /> Stored securely in the database (admin-only) and persists permanently. The server reads it server-side only — never exposed to the browser.
+        </div>
+      </Card>
+
+      {/* ---- Automated session-summary emails (#14) ---- */}
+      <Card style={{ marginBottom: 20 }}
+        title={<span className="section-title"><span className="section-title__icon"><FiZap /></span> Automated Session Emails</span>}
+        sub="Email each candidate (and optionally you) a summary report after every exam. Powered by Resend.">
+        <label className="auth-check" style={{ marginBottom: 14 }}>
+          <input type="checkbox" checked={email.enabled} onChange={(e) => setEmail((s) => ({ ...s, enabled: e.target.checked }))} /> Send summary emails automatically
+        </label>
+        <div className="grid grid-2" style={{ gap: 16 }}>
+          <Field label="Resend API key">
+            <div className="input-icon">
+              <FiKey />
+              <input className="input" type={showEmailKey ? 'text' : 'password'} value={email.apiKey}
+                onChange={(e) => setEmail((s) => ({ ...s, apiKey: e.target.value }))}
+                placeholder="re_…" autoComplete="off" spellCheck={false} />
+              <button type="button" className="input-icon__trail" onClick={() => setShowEmailKey((v) => !v)} tabIndex={-1}>
+                {showEmailKey ? <FiEyeOff /> : <FiEye />}
+              </button>
+            </div>
+          </Field>
+          <Field label="From address (verified sender)">
+            <input className="input" value={email.from} onChange={(e) => setEmail((s) => ({ ...s, from: e.target.value }))} placeholder="PassGP <exams@yourdomain.com>" />
+          </Field>
+        </div>
+        <div className="grid grid-2" style={{ gap: 16 }}>
+          <label className="auth-check">
+            <input type="checkbox" checked={email.sendToCandidate} onChange={(e) => setEmail((s) => ({ ...s, sendToCandidate: e.target.checked }))} /> Email the candidate their report
+          </label>
+          <label className="auth-check">
+            <input type="checkbox" checked={email.ccAdmin} onChange={(e) => setEmail((s) => ({ ...s, ccAdmin: e.target.checked }))} /> Also notify an admin address
+          </label>
+        </div>
+        {email.ccAdmin && (
+          <Field label="Admin notification email">
+            <input className="input" type="email" value={email.adminEmail} onChange={(e) => setEmail((s) => ({ ...s, adminEmail: e.target.value }))} placeholder="admin@passgp.com" />
+          </Field>
+        )}
+        <div className="alert alert--success" style={{ marginTop: 14 }}>
+          <FiShield /> The Resend key is stored server-side and used only to send reports. Get a free key & verify a sender domain at resend.com.
         </div>
       </Card>
 
