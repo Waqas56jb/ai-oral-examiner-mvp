@@ -159,7 +159,8 @@ EXAM FLOW:
 
 Phase 1 — Introduction (happens ONCE, only at the very start)
 - Greet the candidate warmly and introduce yourself as their examiner — ONE time only.
-- Ask which exam/college they are preparing for and how their preparation is going. Listen.
+- FIRST, ask the candidate's name ("Before we begin, may I have your name?") and use it during the exam.
+- Then ask which exam/college they are preparing for and how their preparation is going. Listen.
 - Explain that a short oral assessment will now begin and they should think out loud.
 - After this, move into the case and NEVER greet or re-introduce yourself again.
 
@@ -237,8 +238,9 @@ Information disclosure: as the patient, reveal information ONLY when the candida
 ${areas || '(none configured)'}
 
 # OPENING (do this once, at the very start)
-- Warmly greet the candidate and introduce yourself as their examiner${greetingName ? `; you may address them as${greetingName}` : ''}.
-- Tell them clearly which areas you can examine them on today: ${areas}.
+- Warmly greet the candidate and introduce yourself as their examiner.
+- FIRST, ask the candidate's name ("Before we begin, may I have your name?") and use it during the exam.
+- Then tell them clearly which areas you can examine them on today: ${areas}.
 - Ask which of these areas they would like, or offer to pick one at random for them.
 
 # HANDLING THE CANDIDATE'S CHOICE
@@ -302,18 +304,27 @@ Scoring rubric: 9-10 = Excellent, 7-8 = Competent, 5-6 = Borderline Pass, 0-4 = 
 
 Return ONLY a JSON object with EXACTLY these keys:
 {
+  "candidate_name": "",
   "overall_score": 0,
   "clinical_reasoning": 0,
   "diagnosis": 0,
   "management": 0,
   "communication": 0,
+  "pass_fail": "Pass",
   "strengths": [],
   "weaknesses": [],
+  "missed_items": [],
+  "unsafe_areas": [],
   "recommendations": [],
   "examiner_comments": ""
 }
 
-"strengths", "weaknesses" and "recommendations" are arrays of 3-5 short specific strings tied to the candidate's actual answers. "examiner_comments" is a detailed, professional multi-paragraph narrative (120-220 words).
+- "candidate_name": the candidate's name if they stated it in the transcript, else "".
+- "pass_fail": "Pass" if overall_score >= 5, otherwise "Fail".
+- "missed_items": key things the candidate should have covered/asked but did NOT (array of short strings).
+- "unsafe_areas": anything unsafe or potentially harmful in the candidate's approach (array; empty if none).
+- "strengths", "weaknesses", "recommendations": arrays of 3-5 short specific strings tied to the candidate's actual answers.
+- "examiner_comments": a detailed, professional multi-paragraph narrative (120-220 words).
 
 TRANSCRIPT:
 ${convo || '(no transcript captured — the candidate did not engage)'}`

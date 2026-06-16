@@ -499,3 +499,47 @@
   .va-bg   { padding: 0; background: #090b17; }
   .va-card { max-width: 100%; height: 100svh; max-height: none; border-radius: 0; border: none; }
 }
+
+/* ── Candidate registration overlay (#2) ─────────────── */
+.va-reg-overlay {
+  position: absolute; inset: 0; z-index: 30;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(7, 9, 23, 0.72); backdrop-filter: blur(6px);
+  padding: 20px;
+}
+.va-reg-card {
+  width: 100%; max-width: 380px;
+  background: #0f1428; border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px; padding: 26px 24px;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.5);
+  display: flex; flex-direction: column;
+}
+.va-reg-title { font-size: 1.25rem; font-weight: 800; color: #fff; letter-spacing: -0.01em; }
+.va-reg-sub { font-size: 0.85rem; color: #9aa3c0; margin: 6px 0 18px; line-height: 1.5; }
+.va-reg-label { font-size: 0.78rem; font-weight: 600; color: #b9c0db; margin-bottom: 6px; }
+.va-reg-input {
+  background: #070b18; border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 11px; padding: 11px 13px; color: #fff; font-size: 0.92rem;
+  margin-bottom: 14px; outline: none; transition: border-color .15s;
+}
+.va-reg-input:focus { border-color: var(--c2, #6366f1); }
+.va-reg-input option { color: #111; }
+.va-reg-btn {
+  margin-top: 6px; border: none; cursor: pointer;
+  background: linear-gradient(135deg, var(--c1, #6366f1), var(--c2, #8b5cf6));
+  color: #fff; font-weight: 700; font-size: 0.95rem;
+  border-radius: 12px; padding: 13px; transition: opacity .15s, transform .1s;
+}
+.va-reg-btn:hover:not(:disabled) { transform: translateY(-1px); }
+.va-reg-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ── Countdown timer + warnings (#6) ─────────────── */
+.va-header-time-tag { font-size: 0.62rem; opacity: 0.6; margin-left: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+.va-header-time--low { color: #fca5a5 !important; animation: vaTimePulse 1s ease-in-out infinite; }
+@keyframes vaTimePulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+.va-time-warning {
+  margin: 0 18px 6px; padding: 8px 12px; border-radius: 10px;
+  background: rgba(239, 68, 68, 0.14); border: 1px solid rgba(239,68,68,0.32);
+  color: #fecaca; font-size: 0.8rem; font-weight: 600; text-align: center;
+}
+.va-time-warning--up { background: rgba(99,102,241,0.16); border-color: rgba(99,102,241,0.34); color: #c7d2fe; }

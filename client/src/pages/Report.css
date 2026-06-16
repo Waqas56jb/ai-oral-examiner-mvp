@@ -398,3 +398,9 @@
   .chart-bar-row { grid-template-columns: 120px 1fr 32px; gap: 8px; }
   .rp-band, .rp-charts, .rp-section, .rp-footer { padding-left: 22px; padding-right: 22px; }
 }
+
+/* Candidate identity line on the report header (#2) */
+.rp-candidate {
+  font-size: 0.95rem; font-weight: 700; color: #1e293b;
+  margin: 2px 0 6px;
+}

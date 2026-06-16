@@ -207,6 +207,7 @@ export async function startRealtimeExam({ candidateName = '', examType = 'RACGP'
     formId: session?.formId || formId || null,
     questionTitle: session?.questionTitle || null,
     examType: session?.examType || examType,
+    durationSeconds: Number(session?.durationSeconds) > 0 ? Number(session.durationSeconds) : 480,
     pc,
     dc,
   }

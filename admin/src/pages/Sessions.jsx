@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { FiClipboard, FiEye, FiCheckCircle, FiAlertTriangle, FiDownload } from 'react-icons/fi'
+import { FiClipboard, FiEye, FiCheckCircle, FiAlertTriangle, FiDownload, FiSave, FiCheck } from 'react-icons/fi'
 import { supabase } from '../lib/supabase'
-import { Card, Badge, Search, EmptyState, PageLoader, Modal, IconButton, Button } from '../components/ui'
-import { fmtDateTime, fmtDuration, resultBadge, downloadFile } from '../lib/format'
+import { Card, Badge, Search, EmptyState, PageLoader, Modal, IconButton, Button, Field } from '../components/ui'
+import { fmtDateTime, fmtDuration, resultBadge, downloadFile, toCsv } from '../lib/format'
 
 export default function Sessions() {
   const [rows, setRows] = useState([])
@@ -11,6 +11,9 @@ export default function Sessions() {
   const [status, setStatus] = useState('all')
   const [view, setView] = useState(null)
   const [turns, setTurns] = useState(null)
+  const [override, setOverride] = useState('')
+  const [note, setNote] = useState('')
+  const [savingReview, setSavingReview] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -25,15 +28,39 @@ export default function Sessions() {
     return rows.filter((r) => {
       if (status !== 'all' && r.status !== status) return false
       if (!term) return true
-      return `${r.exam_type} ${r.result} ${r.summary}`.toLowerCase().includes(term)
+      return `${r.candidate_name} ${r.exam_type} ${r.result} ${r.summary}`.toLowerCase().includes(term)
     })
   }, [rows, q, status])
 
   const open = async (s) => {
     setView(s)
     setTurns(null)
+    setOverride(s.score_override != null ? String(Math.round(s.score_override / 10)) : '')
+    setNote(s.reviewer_note || '')
     const { data } = await supabase.from('session_turns').select('*').eq('session_id', s.id).order('id', { ascending: true })
     setTurns(data || [])
+  }
+
+  const saveReview = async () => {
+    setSavingReview(true)
+    const ov = override.trim() === '' ? null : Math.max(0, Math.min(100, Math.round(Number(override) * 10)))
+    await supabase.from('exam_sessions').update({ score_override: ov, reviewer_note: note || null, reviewed: true }).eq('id', view.id)
+    setSavingReview(false)
+    setView((v) => ({ ...v, score_override: ov, reviewer_note: note, reviewed: true }))
+    setRows((rs) => rs.map((r) => (r.id === view.id ? { ...r, score_override: ov, reviewed: true } : r)))
+  }
+
+  const exportCsv = () => {
+    const csv = toCsv(filtered, [
+      { label: 'Candidate', get: (r) => r.candidate_name || 'Anonymous' },
+      { label: 'Exam', key: 'exam_type' },
+      { label: 'AI score /10', get: (r) => (r.score != null ? Math.round(r.score / 10) : '') },
+      { label: 'Override /10', get: (r) => (r.score_override != null ? Math.round(r.score_override / 10) : '') },
+      { label: 'Pass/Fail', get: (r) => r.pass_fail || r.result || '' },
+      { label: 'Reviewed', get: (r) => (r.reviewed ? 'yes' : 'no') },
+      { label: 'Date', get: (r) => fmtDateTime(r.created_at) },
+    ])
+    downloadFile(`passgp-sessions-${Date.now()}.csv`, csv, 'text/csv')
   }
 
   if (loading) return <PageLoader />
@@ -42,6 +69,7 @@ export default function Sessions() {
     <>
       <div className="page-head">
         <div><h2>Exam Sessions</h2><p>{rows.length} sessions · {rows.filter((r) => r.status === 'completed').length} completed</p></div>
+        <div className="page-actions"><Button variant="ghost" icon={<FiDownload />} onClick={exportCsv}>Export CSV</Button></div>
       </div>
 
       <div className="toolbar">
@@ -59,15 +87,15 @@ export default function Sessions() {
         ) : (
           <div className="table-wrap">
             <table className="tbl">
-              <thead><tr><th>Exam</th><th>Score</th><th>Result</th><th>Duration</th><th>Status</th><th>When</th><th></th></tr></thead>
+              <thead><tr><th>Candidate</th><th>Exam</th><th>Score</th><th>Result</th><th>Reviewed</th><th>When</th><th></th></tr></thead>
               <tbody>
                 {filtered.map((r) => (
                   <tr key={r.id}>
-                    <td className="tbl__primary">{r.exam_type || '—'}</td>
-                    <td className="mono">{r.score != null ? Math.round(r.score / 10) + '/10' : '—'}</td>
-                    <td>{r.result ? <Badge color={resultBadge(r.result)}>{r.result}</Badge> : '—'}</td>
-                    <td className="mono">{fmtDuration(r.duration_sec)}</td>
-                    <td><Badge color={r.status === 'completed' ? 'green' : 'amber'} dot>{r.status}</Badge></td>
+                    <td className="tbl__primary">{r.candidate_name || <span className="muted">Anonymous</span>}</td>
+                    <td>{r.exam_type || '—'}</td>
+                    <td className="mono">{(r.score_override ?? r.score) != null ? Math.round((r.score_override ?? r.score) / 10) + '/10' : '—'}{r.score_override != null && <span className="badge badge--violet" style={{ marginLeft: 6 }}>override</span>}</td>
+                    <td>{r.pass_fail ? <Badge color={/fail/i.test(r.pass_fail) ? 'red' : 'green'}>{r.pass_fail}</Badge> : r.result ? <Badge color={resultBadge(r.result)}>{r.result}</Badge> : '—'}</td>
+                    <td>{r.reviewed ? <Badge color="green" dot>Reviewed</Badge> : <span className="muted">—</span>}</td>
                     <td className="muted">{fmtDateTime(r.created_at)}</td>
                     <td style={{ textAlign: 'right' }}><IconButton icon={<FiEye />} onClick={() => open(r)} /></td>
                   </tr>
@@ -82,14 +110,14 @@ export default function Sessions() {
         <Modal wide title="Session review" onClose={() => setView(null)}>
           <div className="flex between items-center">
             <div>
-              <h3 style={{ fontSize: '1.15rem' }}>{view.exam_type} session</h3>
+              <h3 style={{ fontSize: '1.15rem' }}>{view.candidate_name || 'Anonymous'} · {view.exam_type}</h3>
               <p className="muted">{fmtDateTime(view.created_at)} · {fmtDuration(view.duration_sec)}</p>
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontFamily: 'var(--head)', fontWeight: 800, fontSize: '1.8rem', color: 'var(--ink)' }}>
-                {view.score != null ? Math.round(view.score / 10) : '—'}<span style={{ fontSize: '0.9rem', color: 'var(--muted)' }}>/10</span>
+                {(view.score_override ?? view.score) != null ? Math.round((view.score_override ?? view.score) / 10) : '—'}<span style={{ fontSize: '0.9rem', color: 'var(--muted)' }}>/10</span>
               </div>
-              {view.result && <Badge color={resultBadge(view.result)}>{view.result}</Badge>}
+              {view.pass_fail && <Badge color={/fail/i.test(view.pass_fail) ? 'red' : 'green'}>{view.pass_fail}</Badge>}
             </div>
           </div>
 
@@ -105,6 +133,36 @@ export default function Sessions() {
           <div className="grid grid-2" style={{ gap: 14 }}>
             <FbList title="Strengths" items={view.strengths} icon={<FiCheckCircle />} color="#16a34a" />
             <FbList title="Areas to improve" items={view.improvements} icon={<FiAlertTriangle />} color="#d97706" />
+          </div>
+
+          {(arr(view.missed_items).length > 0 || arr(view.unsafe_areas).length > 0) && (
+            <div className="grid grid-2" style={{ gap: 14, marginTop: 14 }}>
+              <FbList title="Missed key items" items={view.missed_items} icon={<FiAlertTriangle />} color="#d97706" />
+              <FbList title="Unsafe / red-flag areas" items={view.unsafe_areas} icon={<FiAlertTriangle />} color="#dc2626" />
+            </div>
+          )}
+
+          <div className="divider" />
+          <div className="card" style={{ background: '#fbfaff', border: '1px solid var(--line-2)' }}>
+            <div className="card__body">
+              <div className="flex between items-center" style={{ marginBottom: 12 }}>
+                <div className="kv__k">Manual review</div>
+                {view.reviewed && <Badge color="green" dot>Reviewed</Badge>}
+              </div>
+              <div className="grid grid-2" style={{ gap: 14 }}>
+                <Field label="Override score (/10)">
+                  <input className="input" type="number" min="0" max="10" step="0.5" value={override}
+                    onChange={(e) => setOverride(e.target.value)}
+                    placeholder={view.score != null ? `AI: ${Math.round(view.score / 10)}` : 'No AI score'} />
+                </Field>
+                <Field label="Reviewer note">
+                  <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional note for the candidate / record" />
+                </Field>
+              </div>
+              <div className="flex" style={{ justifyContent: 'flex-end', marginTop: 12 }}>
+                <Button loading={savingReview} icon={<FiSave />} onClick={saveReview}>Save review</Button>
+              </div>
+            </div>
           </div>
 
           <div className="divider" />
@@ -136,6 +194,8 @@ export default function Sessions() {
     </>
   )
 }
+
+function arr(v) { return Array.isArray(v) ? v : [] }
 
 function FbList({ title, items, icon, color }) {
   const list = Array.isArray(items) ? items : []

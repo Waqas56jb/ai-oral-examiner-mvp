@@ -25,6 +25,9 @@ export const blankQuestion = {
   examiner_instructions: '',
   red_flags: '',
   feedback_points: '',
+  total_marks: 10,
+  pass_mark: 5,
+  duration_minutes: 8,
   is_active: true,
 }
 
@@ -42,6 +45,9 @@ export function rowToForm(d = {}) {
     examiner_instructions: d.examiner_instructions || '',
     red_flags: d.red_flags || '',
     feedback_points: d.feedback_points || '',
+    total_marks: d.total_marks ?? 10,
+    pass_mark: d.pass_mark ?? 5,
+    duration_minutes: d.duration_seconds ? Math.round(d.duration_seconds / 60) : 8,
     is_active: d.is_active ?? true,
   }
 }
@@ -60,6 +66,9 @@ export function formToPayload(f) {
     examiner_instructions: f.examiner_instructions.trim() || null,
     red_flags: f.red_flags.trim() || null,
     feedback_points: f.feedback_points.trim() || null,
+    total_marks: Math.max(1, Number(f.total_marks) || 10),
+    pass_mark: Math.max(0, Number(f.pass_mark) || 0),
+    duration_seconds: Math.max(60, (Number(f.duration_minutes) || 8) * 60),
     is_active: f.is_active,
   }
 }
@@ -96,6 +105,18 @@ export default function QuestionForm({ form, set, categories = [] }) {
       <Field label="Patient script (the AI plays the patient from this — it only reveals info when asked)">
         <AutoTextarea value={form.patient_script} onChange={f('patient_script')} maxHeight={300} placeholder="Opening line, history, hidden concerns, what to reveal only when asked…" />
       </Field>
+
+      <div className="grid grid-3" style={{ gap: 16 }}>
+        <Field label="Total marks">
+          <input className="input" type="number" min="1" value={form.total_marks} onChange={f('total_marks')} />
+        </Field>
+        <Field label="Pass mark">
+          <input className="input" type="number" min="0" value={form.pass_mark} onChange={f('pass_mark')} />
+        </Field>
+        <Field label="Time limit (minutes)">
+          <input className="input" type="number" min="1" value={form.duration_minutes} onChange={f('duration_minutes')} />
+        </Field>
+      </div>
 
       <Field label="Tasks / marking rubric (one per line)">
         <AutoTextarea value={form.marking_criteria} onChange={f('marking_criteria')} maxHeight={260} placeholder={'Takes a focused history\nReaches the correct diagnosis\nSafe management plan'} />

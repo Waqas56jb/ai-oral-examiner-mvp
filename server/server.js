@@ -50,18 +50,27 @@ async function getFallbackKey() {
     return null
   }
 }
-// Voice chosen by the admin (AI Config), falling back to the code default.
-let _voiceCache = { v: null, at: 0 }
-async function activeVoice() {
+// AI config chosen by the admin (voice + models), cached, with code fallbacks.
+let _cfgCache = { v: null, at: 0 }
+async function getAIConfig() {
   try {
-    if (!supabase) return config.voice
-    if (Date.now() - _voiceCache.at < 60_000 && _voiceCache.v) return _voiceCache.v
+    if (!supabase) return {}
+    if (Date.now() - _cfgCache.at < 60_000 && _cfgCache.v) return _cfgCache.v
     const { data } = await supabase.from('app_settings').select('value').eq('key', 'ai_config').maybeSingle()
-    _voiceCache = { v: data?.value?.voice || config.voice, at: Date.now() }
-    return _voiceCache.v
+    _cfgCache = { v: data?.value || {}, at: Date.now() }
+    return _cfgCache.v
   } catch {
-    return config.voice
+    return {}
   }
+}
+async function activeVoice() {
+  return (await getAIConfig()).voice || config.voice
+}
+async function activeRealtimeModel() {
+  return (await getAIConfig()).realtimeModel || config.realtimeModel
+}
+async function activeChatModel() {
+  return (await getAIConfig()).chatModel || config.chatModel
 }
 function isQuotaOrAuth(e, status) {
   const s = status ?? e?.status ?? e?.response?.status
@@ -142,6 +151,7 @@ app.post('/api/realtime/session', async (req, res) => {
         questionTitle: question.title || null,
         examType: question.examType,
         categories: [],
+        durationSeconds: Number(rawCase.duration_seconds) > 0 ? Number(rawCase.duration_seconds) : 480,
       }
     } else {
       // Adaptive, category-aware session across the whole training set:
@@ -149,13 +159,13 @@ app.post('/api/realtime/session', async (req, res) => {
       const pool = await getTrainingPool()
       if (!pool.cases.length) return res.status(409).json({ maintenance: true, error: MAINTENANCE_MSG })
       instructions = buildPoolInstructions({ categories: pool.categories, cases: pool.cases, candidateName, forVoice: true })
-      meta = { questionId: null, formId: null, questionTitle: 'Adaptive training session', examType: '', categories: pool.categories }
+      meta = { questionId: null, formId: null, questionTitle: 'Adaptive training session', examType: '', categories: pool.categories, durationSeconds: 900 }
     }
 
     const sessionBody = JSON.stringify({
       session: {
         type: 'realtime',
-        model: config.realtimeModel,
+        model: await activeRealtimeModel(),
         instructions,
         audio: {
           input: {
@@ -249,7 +259,7 @@ app.post('/api/chat', async (req, res) => {
 
     const stream = await chatCreate(
       {
-        model: config.chatModel,
+        model: await activeChatModel(),
         stream: true,
         temperature: 0.7,
         messages: [
@@ -282,7 +292,8 @@ app.post('/api/chat', async (req, res) => {
 /*  Body: { transcript: [{ role, text }], examType? }                   */
 /* ------------------------------------------------------------------ */
 app.post('/api/feedback', async (req, res) => {
-  const { transcript = [], examType = '', questionId, formId, durationSec = 0, save = true } = req.body || {}
+  const { transcript = [], examType = '', questionId, formId, durationSec = 0, save = true,
+          candidateName = '', candidateEmail = '', pathway = '' } = req.body || {}
 
   try {
     const rawCase = questionId || formId ? await resolveCase({ formId, questionId, examType }) : null
@@ -295,7 +306,7 @@ app.post('/api/feedback', async (req, res) => {
     const userPrompt = buildFeedbackUserPrompt(transcript)
 
     const completion = await chatCreate({
-      model: config.chatModel,
+      model: await activeChatModel(),
       temperature: 0.4,
       response_format: { type: 'json_object' },
       messages: [
@@ -325,12 +336,18 @@ app.post('/api/feedback', async (req, res) => {
         durationSec,
         questionsAnswered,
         wordCount,
+        candidateName: (candidateName && candidateName.trim()) || report.candidate_name || null,
+        candidateEmail: (candidateEmail && candidateEmail.trim()) || null,
+        pathway: (pathway && pathway.trim()) || (rawCase ? question.pathway : '') || null,
         feedback: {
           score: report.score, // 0-100
           result: report.result,
+          pass_fail: report.pass_fail,
           summary: report.examiner_comments,
           strengths: report.strengths,
           improvements: report.weaknesses,
+          missed_items: report.missed_items,
+          unsafe_areas: report.unsafe_areas,
         },
         transcript,
       })
@@ -356,13 +373,17 @@ function buildReport(data) {
 
   return {
     // ---- exact production JSON schema (0-10) ----
+    candidate_name: str(data.candidate_name),
     overall_score: overall,
     clinical_reasoning: dr,
     diagnosis: dx,
     management: mg,
     communication: co,
+    pass_fail: /fail/i.test(String(data.pass_fail)) ? 'Fail' : overall >= 5 ? 'Pass' : 'Fail',
     strengths: arr(data.strengths),
     weaknesses: arr(data.weaknesses),
+    missed_items: arr(data.missed_items),
+    unsafe_areas: arr(data.unsafe_areas),
     recommendations: arr(data.recommendations),
     examiner_comments: str(data.examiner_comments),
     // ---- derived fields for charts / report / DB (0-100) ----

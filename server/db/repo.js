@@ -100,6 +100,9 @@ export async function saveSession(session) {
       userId = null,
       questionId = null,
       examType = 'RACGP',
+      candidateName = null,
+      candidateEmail = null,
+      pathway = null,
       durationSec = 0,
       questionsAnswered = 0,
       wordCount = 0,
@@ -113,6 +116,9 @@ export async function saveSession(session) {
         user_id: userId,
         question_id: questionId,
         exam_type: examType,
+        candidate_name: candidateName,
+        candidate_email: candidateEmail,
+        pathway: pathway,
         status: 'completed',
         ended_at: new Date().toISOString(),
         duration_sec: durationSec,
@@ -121,9 +127,12 @@ export async function saveSession(session) {
         confidence: feedback.confidence ?? null,
         score: feedback.score ?? null,
         result: feedback.result ?? null,
+        pass_fail: feedback.pass_fail ?? null,
         summary: feedback.summary ?? null,
         strengths: feedback.strengths ?? [],
         improvements: feedback.improvements ?? [],
+        missed_items: feedback.missed_items ?? [],
+        unsafe_areas: feedback.unsafe_areas ?? [],
       })
       .select('id')
       .single()

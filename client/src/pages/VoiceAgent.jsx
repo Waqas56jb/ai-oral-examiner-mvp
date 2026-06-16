@@ -12,6 +12,12 @@ import '../styles/widgetTheme.css'
 // category is used). A specific category can be forced via ?exam=...
 const EXAM_TYPE = ''
 
+// Exam pathways the candidate can register under (kept in sync with the admin case builder).
+const PATHWAYS = ['RACGP CCE', 'StAMPS (ACRRM)', 'AMC Clinical', 'PESCI', 'RANZCOG OSCE', 'RACP Clinical', 'KFP', 'AKT', 'NZREX', 'Other']
+
+// Countdown warning thresholds (seconds remaining).
+const WARN_AT = 60
+
 const BAR_HEIGHTS = [4,7,12,18,26,34,40,42,38,30,22,16,12,9,16,24,34,42,40,34,26,18,12,7,5,4,8,11]
 
 const STATE_META = {
@@ -59,6 +65,18 @@ export default function VoiceAgent() {
     return () => { active = false }
   }, [])
 
+  // Candidate registration (#2): captured before the exam so reports are never "Unnamed".
+  const [registered, setRegistered] = useState(false)
+  const [reg, setReg] = useState({ name: '', email: '', pathway: params.exam || '' })
+  const regRef = useRef(reg)
+
+  // Countdown timer (#6)
+  const [remaining, setRemaining] = useState(null) // seconds left, null until started
+  const [timeUp, setTimeUp] = useState(false)
+  const limitRef = useRef(480)
+  const warnedRef = useRef(false)
+  const endRef = useRef(null)
+
   const [examState, setExamState] = useState('idle')
   const [running,   setRunning]   = useState(false)
   const [muted,     setMuted]     = useState(false)
@@ -85,6 +103,19 @@ export default function VoiceAgent() {
     sessionTimerRef.current = setInterval(() => {
       sessionSecRef.current += 1
       setSessionSec(sessionSecRef.current)
+
+      // Countdown + warnings + auto-termination (#6)
+      const left = Math.max(0, limitRef.current - sessionSecRef.current)
+      setRemaining(left)
+      if (left <= WARN_AT && !warnedRef.current) {
+        warnedRef.current = true
+        setTimeUp(false) // ensure warning banner shows, not the ended state yet
+      }
+      if (left <= 0) {
+        stopTimer()
+        setTimeUp(true)
+        endRef.current?.()
+      }
     }, 1000)
   }, [])
 
@@ -106,6 +137,7 @@ export default function VoiceAgent() {
 
     try {
       const session = await startRealtimeExam({
+        candidateName: regRef.current.name,
         examType: params.exam,
         formId: params.formId,
         handlers: {
@@ -128,6 +160,11 @@ export default function VoiceAgent() {
       })
       sessionRef.current = session
       questionRef.current = { id: session.questionId, formId: session.formId, title: session.questionTitle, examType: session.examType }
+      // Arm the countdown from the case's configured duration.
+      limitRef.current = Number(session.durationSeconds) > 0 ? Number(session.durationSeconds) : 480
+      warnedRef.current = false
+      setTimeUp(false)
+      setRemaining(limitRef.current)
       setRunning(true)
       setMuted(false)
       startTimer()
@@ -167,6 +204,9 @@ export default function VoiceAgent() {
           questionId: questionRef.current.id,
           formId: questionRef.current.formId,
           durationSec: sessionSecRef.current,
+          candidateName: regRef.current.name,
+          candidateEmail: regRef.current.email,
+          pathway: regRef.current.pathway,
         }),
       })
       if (res.ok) feedback = await res.json()
@@ -179,6 +219,9 @@ export default function VoiceAgent() {
       avgConfidence:     feedback?.score ?? 72,
       questionTitle:     questionRef.current.title || 'Clinical case',
       examType:          questionRef.current.examType || params.exam || 'General',
+      candidateName:     regRef.current.name,
+      candidateEmail:    regRef.current.email,
+      pathway:           regRef.current.pathway,
       feedback,
       transcript:        transcriptRef.current,
       date:              new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }),
@@ -190,6 +233,10 @@ export default function VoiceAgent() {
     if (examState === 'idle' || examState === 'error' || examState === 'maintenance') startSession()
     else if (running) toggleMute()
   }, [examState, running, startSession, toggleMute])
+
+  // Keep refs in sync so the timer interval / async callbacks see fresh values.
+  useEffect(() => { regRef.current = reg }, [reg])
+  useEffect(() => { endRef.current = endSession }, [endSession])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -203,6 +250,14 @@ export default function VoiceAgent() {
   const timeStr  = fmtTime(sessionSec)
   const isActive = examState === 'listen' || examState === 'speak'
   const subText  = examState === 'speak' && liveCaption ? liveCaption : (errorMsg && (examState === 'error' || examState === 'maintenance') ? errorMsg : meta.sub)
+  const lowTime  = running && remaining != null && remaining <= WARN_AT
+  const countdownStr = remaining != null ? fmtTime(remaining) : fmtTime(limitRef.current)
+
+  const submitRegistration = (e) => {
+    e.preventDefault()
+    if (!reg.name.trim()) return
+    setRegistered(true)
+  }
 
   return (
     <div
@@ -213,7 +268,34 @@ export default function VoiceAgent() {
       <div className="va-theme-aura" aria-hidden="true">
         <span className="va-theme-aura__mid" />
       </div>
-      <div className={`va-card state-${examState}`}>
+
+      {!registered && (
+        <div className="va-reg-overlay">
+          <form className="va-reg-card" onSubmit={submitRegistration}>
+            <div className="va-reg-title">Before you begin</div>
+            <div className="va-reg-sub">Register so your examiner report is saved to your name.</div>
+
+            <label className="va-reg-label">Full name<span style={{ color: '#ef4444' }}> *</span></label>
+            <input className="va-reg-input" value={reg.name} required placeholder="e.g. Dr Sarah Khan"
+              onChange={(e) => setReg((r) => ({ ...r, name: e.target.value }))} />
+
+            <label className="va-reg-label">Email</label>
+            <input className="va-reg-input" type="email" value={reg.email} placeholder="you@example.com"
+              onChange={(e) => setReg((r) => ({ ...r, email: e.target.value }))} />
+
+            <label className="va-reg-label">Exam pathway</label>
+            <select className="va-reg-input" value={reg.pathway}
+              onChange={(e) => setReg((r) => ({ ...r, pathway: e.target.value }))}>
+              <option value="">Select a pathway…</option>
+              {PATHWAYS.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+
+            <button className="va-reg-btn" type="submit" disabled={!reg.name.trim()}>Start exam →</button>
+          </form>
+        </div>
+      )}
+
+      <div className={`va-card state-${examState}`} style={{ filter: registered ? 'none' : 'blur(4px)', pointerEvents: registered ? 'auto' : 'none' }}>
 
         {/* Header */}
         <div className="va-header">
@@ -227,8 +309,18 @@ export default function VoiceAgent() {
               </div>
             </div>
           </div>
-          <div className="va-header-time">{timeStr}</div>
+          <div className={`va-header-time${lowTime ? ' va-header-time--low' : ''}`}>
+            {running ? countdownStr : timeStr}
+            {running && <span className="va-header-time-tag">left</span>}
+          </div>
         </div>
+
+        {lowTime && !timeUp && (
+          <div className="va-time-warning">⚠ Less than a minute remaining — wrap up your answer.</div>
+        )}
+        {timeUp && (
+          <div className="va-time-warning va-time-warning--up">⏱ Time is up — generating your report…</div>
+        )}
 
         {/* Orb */}
         <div className="va-orb-section">

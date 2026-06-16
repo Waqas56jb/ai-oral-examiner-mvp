@@ -5,7 +5,9 @@ import { Card, Button, PageLoader, Field } from '../components/ui'
 
 const VOICES = ['marin', 'cedar', 'sage', 'verse', 'alloy', 'ash', 'coral', 'shimmer']
 const DIFFICULTY = ['gentle', 'standard', 'rigorous']
-const defaults = { voice: 'marin', difficulty: 'standard', examinerInstructions: '', systemPromptOverride: '' }
+const REALTIME_MODELS = ['gpt-realtime', 'gpt-4o-realtime-preview-2024-12-17']
+const CHAT_MODELS = ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1']
+const defaults = { voice: 'marin', difficulty: 'standard', realtimeModel: 'gpt-realtime', chatModel: 'gpt-4o-mini', examinerInstructions: '', systemPromptOverride: '' }
 
 export default function AIConfig() {
   const [cfg, setCfg] = useState(null)
@@ -63,6 +65,26 @@ export default function AIConfig() {
             </select>
           </Field>
           <p className="muted" style={{ fontSize: '0.82rem', marginTop: 10 }}>“Rigorous” probes harder and accepts fewer vague answers.</p>
+        </Card>
+      </div>
+
+      <div className="grid grid-2" style={{ marginBottom: 20 }}>
+        <Card title={<span><FiCpu style={{ verticalAlign: '-2px' }} /> Voice model (Realtime)</span>} sub="The model that powers the live voice examiner">
+          <Field label="Realtime model">
+            <select className="select" value={cfg.realtimeModel} onChange={(e) => set('realtimeModel', e.target.value)}>
+              {REALTIME_MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </Field>
+          <p className="muted" style={{ fontSize: '0.82rem', marginTop: 10 }}>gpt-realtime is the latest, most natural. Applied to new sessions.</p>
+        </Card>
+
+        <Card title={<span><FiCpu style={{ verticalAlign: '-2px' }} /> Grading model (Chat)</span>} sub="The model that writes the scored feedback report">
+          <Field label="Chat model">
+            <select className="select" value={cfg.chatModel} onChange={(e) => set('chatModel', e.target.value)}>
+              {CHAT_MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </Field>
+          <p className="muted" style={{ fontSize: '0.82rem', marginTop: 10 }}>gpt-4o is more thorough; gpt-4o-mini is faster & cheaper.</p>
         </Card>
       </div>
 

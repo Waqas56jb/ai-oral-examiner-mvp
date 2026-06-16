@@ -31,6 +31,8 @@ export default function Report() {
     date,
     questionTitle = 'Clinical case',
     examType = 'RACGP',
+    candidateName = '',
+    pathway = '',
   } = sessionData
 
   const fb = sessionData.feedback || {}
@@ -48,6 +50,9 @@ export default function Report() {
   const strengths = fb.strengths || []
   const improvements = fb.improvements || fb.weaknesses || []
   const recommendations = fb.recommendations || []
+  const missedItems = fb.missed_items || []
+  const unsafeAreas = fb.unsafe_areas || []
+  const passFail = fb.pass_fail || ''
   const timeStr = fmtTime(durationSec)
   const rl = result.toLowerCase()
   const resultClass = rl.includes('excellent') || rl.includes('competent') ? 'pass' : rl.includes('needs') || rl.includes('below') ? 'fail' : 'merit'
@@ -115,6 +120,7 @@ export default function Report() {
               <span className="rp-logo-text">PassGP</span>
             </div>
             <h1 className="rp-title">AI Oral Examiner — Performance Report</h1>
+            {candidateName && <div className="rp-candidate">{candidateName}{pathway ? ` · ${pathway}` : ''}</div>}
             <div className="rp-meta">
               <span>{examType}</span>
               <span>•</span>
@@ -124,8 +130,8 @@ export default function Report() {
             </div>
           </div>
           <div className={`rp-band-result rp-result-${resultClass}`}>
-            <span className="rp-result-band">{result}</span>
-            <span className="rp-result-sub">Overall outcome</span>
+            <span className="rp-result-band">{passFail || result}</span>
+            <span className="rp-result-sub">{passFail ? `${result} · Overall outcome` : 'Overall outcome'}</span>
           </div>
         </div>
 
@@ -177,6 +183,12 @@ export default function Report() {
           <FeedbackList title="Strengths" items={strengths} tone="good" emptyText="No specific strengths recorded." />
           <FeedbackList title="Areas to improve" items={improvements} tone="warn" emptyText="No improvement points recorded." />
         </div>
+        {(missedItems.length > 0 || unsafeAreas.length > 0) && (
+          <div className="rp-cols">
+            {missedItems.length > 0 && <FeedbackList title="Missed key items" items={missedItems} tone="warn" emptyText="" />}
+            {unsafeAreas.length > 0 && <FeedbackList title="Unsafe / red-flag areas" items={unsafeAreas} tone="warn" emptyText="" />}
+          </div>
+        )}
         {recommendations.length > 0 && (
           <div className="rp-section">
             <h3 className="rp-section-title">Recommended next steps</h3>
