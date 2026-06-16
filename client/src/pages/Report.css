@@ -404,3 +404,13 @@
   font-size: 0.95rem; font-weight: 700; color: #1e293b;
   margin: 2px 0 6px;
 }
+
+/* Mock exam circuit summary (#10) */
+.rp-station-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+.rp-station-card { border: 1px solid #e8ecf3; border-radius: 12px; padding: 14px; background: #fbfcfe; }
+.rp-station-no { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #8b5cf6; }
+.rp-station-title { font-size: 0.85rem; color: #334155; margin: 4px 0 8px; line-height: 1.35; min-height: 2.3em; }
+.rp-station-score { font-family: var(--head, inherit); font-weight: 800; font-size: 1.6rem; color: #0f172a; }
+.rp-station-badge { display: inline-block; margin-top: 6px; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; }
+.rp-station-badge.pass { background: #dcfce7; color: #15803d; }
+.rp-station-badge.fail { background: #fee2e2; color: #b91c1c; }

@@ -33,6 +33,8 @@ export default function Report() {
     examType = 'RACGP',
     candidateName = '',
     pathway = '',
+    isMock = false,
+    stations = [],
   } = sessionData
 
   const fb = sessionData.feedback || {}
@@ -142,6 +144,28 @@ export default function Report() {
           <Stat icon="💬" label="Words spoken" value={wordCount} />
           <Stat icon="🎯" label="Overall" value={`${overall}/10`} />
         </div>
+
+        {/* Mock circuit summary (#10) */}
+        {isMock && stations.length > 0 && (
+          <div className="rp-section">
+            <h3 className="rp-section-title">Circuit summary — {stations.length} stations</h3>
+            <div className="rp-station-grid">
+              {stations.map((st) => {
+                const sScore = st.feedback?.score
+                const sOverall = sScore != null ? Math.round(sScore / 10) : null
+                const sPass = st.feedback?.pass_fail
+                return (
+                  <div key={st.station} className="rp-station-card">
+                    <div className="rp-station-no">Station {st.station}</div>
+                    <div className="rp-station-title">{st.title}</div>
+                    <div className="rp-station-score">{sOverall != null ? `${sOverall}/10` : '—'}</div>
+                    {sPass && <span className={`rp-station-badge ${/fail/i.test(sPass) ? 'fail' : 'pass'}`}>{sPass}</span>}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Charts row */}
         <div className="rp-charts">

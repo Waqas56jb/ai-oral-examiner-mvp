@@ -543,3 +543,15 @@
   color: #fecaca; font-size: 0.8rem; font-weight: 600; text-align: center;
 }
 .va-time-warning--up { background: rgba(99,102,241,0.16); border-color: rgba(99,102,241,0.34); color: #c7d2fe; }
+
+/* ── Mock exam station progress (#10) ─────────────── */
+.va-station-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 0 18px 8px; padding: 7px 12px; border-radius: 10px;
+  background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.28);
+}
+.va-station-label { font-size: 0.78rem; font-weight: 700; color: #c7d2fe; letter-spacing: 0.02em; }
+.va-station-dots { display: flex; gap: 6px; }
+.va-station-dot { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,0.18); transition: background .2s; }
+.va-station-dot.active { background: var(--c2, #8b5cf6); box-shadow: 0 0 0 3px rgba(139,92,246,0.25); }
+.va-station-dot.done { background: #10b981; }

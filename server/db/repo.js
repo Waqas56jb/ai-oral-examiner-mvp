@@ -67,6 +67,47 @@ export async function getTrainingPool(maxCategories = 16) {
   }
 }
 
+/**
+ * Build a mock-exam circuit: N distinct random cases from the training set.
+ * Optionally filtered by pathway/category. Returns a list of station descriptors.
+ */
+export async function getCircuit({ count = 3, pathway = '', examType = '' } = {}) {
+  if (!supabase) return []
+  try {
+    let query = supabase
+      .from('exam_questions')
+      .select('id, title, exam_type, pathway, duration_seconds')
+      .eq('is_active', true)
+      .eq('in_training', true)
+      .limit(3000)
+    if (pathway) query = query.eq('pathway', pathway)
+    if (examType) query = query.eq('exam_type', examType)
+    const { data } = await query
+    let pool = data || []
+    // If a filter yields nothing, fall back to the whole training set.
+    if (!pool.length && (pathway || examType)) {
+      const { data: all } = await supabase
+        .from('exam_questions').select('id, title, exam_type, pathway, duration_seconds')
+        .eq('is_active', true).eq('in_training', true).limit(3000)
+      pool = all || []
+    }
+    if (!pool.length) return []
+    // Shuffle and take up to `count` distinct cases.
+    const shuffled = pool.slice().sort(() => Math.random() - 0.5)
+    const n = Math.max(1, Math.min(Number(count) || 3, 10, shuffled.length))
+    return shuffled.slice(0, n).map((q, i) => ({
+      station: i + 1,
+      questionId: q.id,
+      title: q.title || `Station ${i + 1}`,
+      examType: q.exam_type || 'General',
+      pathway: q.pathway || '',
+      durationSeconds: Number(q.duration_seconds) > 0 ? Number(q.duration_seconds) : 480,
+    }))
+  } catch {
+    return []
+  }
+}
+
 // Count of cases currently in the training set.
 export async function trainingCount() {
   if (!supabase) return 0

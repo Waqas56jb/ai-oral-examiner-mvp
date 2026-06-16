@@ -19,7 +19,7 @@ import { apiUrl } from './config'
 const SESSION_ENDPOINT = apiUrl('/api/realtime/session')
 const FALLBACK_WEBRTC_URL = 'https://api.openai.com/v1/realtime/calls'
 
-export async function startRealtimeExam({ candidateName = '', examType = 'RACGP', formId = null, handlers = {} } = {}) {
+export async function startRealtimeExam({ candidateName = '', examType = 'RACGP', formId = null, questionId = null, handlers = {} } = {}) {
   const {
     onState = () => {},
     onLatency = () => {},
@@ -33,7 +33,7 @@ export async function startRealtimeExam({ candidateName = '', examType = 'RACGP'
   const tokenRes = await fetch(SESSION_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ candidateName, examType, formId }),
+    body: JSON.stringify({ candidateName, examType, formId, questionId }),
   })
   if (!tokenRes.ok) {
     let msg = `Could not start the session (${tokenRes.status}).`

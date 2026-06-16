@@ -40,9 +40,16 @@ const orbStateFor = (s) =>
 function readParams() {
   try {
     const p = new URLSearchParams(window.location.search)
-    return { formId: p.get('formId') || p.get('form') || null, exam: p.get('exam') || EXAM_TYPE }
+    const mockRaw = p.get('mock') // e.g. ?mock=3 → a 3-station circuit
+    const mock = mockRaw != null ? Math.max(1, Math.min(parseInt(mockRaw, 10) || 3, 10)) : 0
+    return {
+      formId: p.get('formId') || p.get('form') || null,
+      exam: p.get('exam') || EXAM_TYPE,
+      mock,
+      pathway: p.get('pathway') || '',
+    }
   } catch {
-    return { formId: null, exam: EXAM_TYPE }
+    return { formId: null, exam: EXAM_TYPE, mock: 0, pathway: '' }
   }
 }
 
@@ -76,6 +83,15 @@ export default function VoiceAgent() {
   const limitRef = useRef(480)
   const warnedRef = useRef(false)
   const endRef = useRef(null)
+  const startSessionRef = useRef(null)
+
+  // Mock-exam circuit (#10): multiple stations run sequentially.
+  const isMock = params.mock > 0
+  const circuitRef = useRef([])           // [{questionId, title, examType, durationSeconds}]
+  const stationIdxRef = useRef(0)
+  const stationResultsRef = useRef([])    // accumulated per-station results
+  const [stationIdx, setStationIdx] = useState(0)
+  const [loadingCircuit, setLoadingCircuit] = useState(false)
 
   const [examState, setExamState] = useState('idle')
   const [running,   setRunning]   = useState(false)
@@ -135,11 +151,14 @@ export default function VoiceAgent() {
     setErrorMsg('')
     setExamState('connecting')
 
+    const station = isMock ? circuitRef.current[stationIdxRef.current] : null
+
     try {
       const session = await startRealtimeExam({
         candidateName: regRef.current.name,
-        examType: params.exam,
+        examType: station ? station.examType : params.exam,
         formId: params.formId,
+        questionId: station ? station.questionId : null,
         handlers: {
           onState: (s) => setExamState(s),
           onLatency: (ms) => setLatency(ms + 'ms'),
@@ -183,6 +202,18 @@ export default function VoiceAgent() {
     sessionRef.current.toggleMute(next)
   }, [muted])
 
+  // Reset the per-station counters/transcript before the next mock station.
+  const resetStationState = useCallback(() => {
+    sessionSecRef.current = 0
+    wordCountRef.current = 0
+    turnsRef.current = 0
+    transcriptRef.current = []
+    setSessionSec(0); setWordCount(0); setTurns(0); setLiveCaption('')
+    warnedRef.current = false
+    setTimeUp(false)
+    startedRef.current = false
+  }, [])
+
   const endSession = useCallback(async () => {
     stopTimer()
     setRunning(false)
@@ -192,7 +223,11 @@ export default function VoiceAgent() {
     } catch { /* noop */ }
     sessionRef.current = null
 
+    const moreStations = isMock && stationIdxRef.current < circuitRef.current.length - 1
+
     // Ask the backend for a full, detailed assessment of the transcript.
+    // Only persist (save) the final/standalone result for single sessions; for a
+    // mock circuit we save each station too so it shows in the candidate history.
     let feedback = null
     try {
       const res = await fetch(apiUrl('/api/feedback'), {
@@ -212,22 +247,69 @@ export default function VoiceAgent() {
       if (res.ok) feedback = await res.json()
     } catch { /* fall back to null */ }
 
-    setSessionData({
-      durationSec:       sessionSecRef.current,
-      questionsAnswered: turnsRef.current,
-      wordCount:         wordCountRef.current,
-      avgConfidence:     feedback?.score ?? 72,
-      questionTitle:     questionRef.current.title || 'Clinical case',
-      examType:          questionRef.current.examType || params.exam || 'General',
-      candidateName:     regRef.current.name,
-      candidateEmail:    regRef.current.email,
-      pathway:           regRef.current.pathway,
-      feedback,
-      transcript:        transcriptRef.current,
-      date:              new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }),
-    })
+    // Mock circuit: record this station's result.
+    if (isMock) {
+      stationResultsRef.current.push({
+        station: stationIdxRef.current + 1,
+        title: questionRef.current.title || `Station ${stationIdxRef.current + 1}`,
+        examType: questionRef.current.examType || 'General',
+        durationSec: sessionSecRef.current,
+        feedback,
+        transcript: transcriptRef.current,
+      })
+    }
+
+    // More stations to run → advance and auto-start the next one.
+    if (moreStations) {
+      stationIdxRef.current += 1
+      setStationIdx(stationIdxRef.current)
+      resetStationState()
+      setExamState('connecting')
+      // Brief pause so the candidate sees the station transition.
+      setTimeout(() => { startSessionRef.current?.() }, 1200)
+      return
+    }
+
+    // Final report. For a mock circuit, summarise across stations.
+    const base = {
+      candidateName:  regRef.current.name,
+      candidateEmail: regRef.current.email,
+      pathway:        regRef.current.pathway,
+      date:           new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }),
+    }
+
+    if (isMock) {
+      const stations = stationResultsRef.current
+      const scored = stations.filter((s) => s.feedback?.score != null)
+      const avgScore = scored.length ? Math.round(scored.reduce((a, s) => a + s.feedback.score, 0) / scored.length) : null
+      setSessionData({
+        ...base,
+        isMock: true,
+        stations,
+        questionTitle: `Mock exam circuit · ${stations.length} stations`,
+        examType: regRef.current.pathway || 'Mock exam',
+        durationSec: stations.reduce((a, s) => a + s.durationSec, 0),
+        questionsAnswered: stations.reduce((a, s) => a + (s.transcript?.filter((t) => t.role === 'examiner').length || 0), 0),
+        wordCount: stations.reduce((a, s) => a + (s.transcript?.reduce((n, t) => n + String(t.text || '').split(/\s+/).filter(Boolean).length, 0) || 0), 0),
+        avgConfidence: avgScore ?? 72,
+        feedback: scored.length ? { ...stations[stations.length - 1].feedback, score: avgScore } : (stations[stations.length - 1]?.feedback || null),
+        transcript: stations.flatMap((s) => s.transcript || []),
+      })
+    } else {
+      setSessionData({
+        ...base,
+        durationSec:       sessionSecRef.current,
+        questionsAnswered: turnsRef.current,
+        wordCount:         wordCountRef.current,
+        avgConfidence:     feedback?.score ?? 72,
+        questionTitle:     questionRef.current.title || 'Clinical case',
+        examType:          questionRef.current.examType || params.exam || 'General',
+        feedback,
+        transcript:        transcriptRef.current,
+      })
+    }
     navigate('/report')
-  }, [navigate, setSessionData])
+  }, [navigate, setSessionData, isMock, resetStationState])
 
   const onMicButton = useCallback(() => {
     if (examState === 'idle' || examState === 'error' || examState === 'maintenance') startSession()
@@ -237,6 +319,7 @@ export default function VoiceAgent() {
   // Keep refs in sync so the timer interval / async callbacks see fresh values.
   useEffect(() => { regRef.current = reg }, [reg])
   useEffect(() => { endRef.current = endSession }, [endSession])
+  useEffect(() => { startSessionRef.current = startSession }, [startSession])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -253,9 +336,26 @@ export default function VoiceAgent() {
   const lowTime  = running && remaining != null && remaining <= WARN_AT
   const countdownStr = remaining != null ? fmtTime(remaining) : fmtTime(limitRef.current)
 
-  const submitRegistration = (e) => {
+  const submitRegistration = async (e) => {
     e.preventDefault()
     if (!reg.name.trim()) return
+    // Mock exam: build the circuit (sequential stations) before starting.
+    if (isMock) {
+      setLoadingCircuit(true)
+      try {
+        const qs = new URLSearchParams({ count: String(params.mock) })
+        if (reg.pathway) qs.set('pathway', reg.pathway)
+        const res = await fetch(apiUrl(`/api/mock/circuit?${qs.toString()}`))
+        const data = await res.json()
+        circuitRef.current = data?.stations || []
+      } catch {
+        circuitRef.current = []
+      }
+      setLoadingCircuit(false)
+      stationIdxRef.current = 0
+      setStationIdx(0)
+      stationResultsRef.current = []
+    }
     setRegistered(true)
   }
 
@@ -272,8 +372,8 @@ export default function VoiceAgent() {
       {!registered && (
         <div className="va-reg-overlay">
           <form className="va-reg-card" onSubmit={submitRegistration}>
-            <div className="va-reg-title">Before you begin</div>
-            <div className="va-reg-sub">Register so your examiner report is saved to your name.</div>
+            <div className="va-reg-title">{isMock ? `Mock exam · ${params.mock} stations` : 'Before you begin'}</div>
+            <div className="va-reg-sub">{isMock ? 'A full circuit of cases run back-to-back. Register so your report is saved to your name.' : 'Register so your examiner report is saved to your name.'}</div>
 
             <label className="va-reg-label">Full name<span style={{ color: '#ef4444' }}> *</span></label>
             <input className="va-reg-input" value={reg.name} required placeholder="e.g. Dr Sarah Khan"
@@ -290,7 +390,9 @@ export default function VoiceAgent() {
               {PATHWAYS.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
 
-            <button className="va-reg-btn" type="submit" disabled={!reg.name.trim()}>Start exam →</button>
+            <button className="va-reg-btn" type="submit" disabled={!reg.name.trim() || loadingCircuit}>
+              {loadingCircuit ? 'Preparing circuit…' : isMock ? 'Start mock exam →' : 'Start exam →'}
+            </button>
           </form>
         </div>
       )}
@@ -315,11 +417,22 @@ export default function VoiceAgent() {
           </div>
         </div>
 
+        {isMock && circuitRef.current.length > 0 && (
+          <div className="va-station-bar">
+            <span className="va-station-label">Station {stationIdx + 1} of {circuitRef.current.length}</span>
+            <div className="va-station-dots">
+              {circuitRef.current.map((_, i) => (
+                <span key={i} className={`va-station-dot${i < stationIdx ? ' done' : i === stationIdx ? ' active' : ''}`} />
+              ))}
+            </div>
+          </div>
+        )}
+
         {lowTime && !timeUp && (
           <div className="va-time-warning">⚠ Less than a minute remaining — wrap up your answer.</div>
         )}
         {timeUp && (
-          <div className="va-time-warning va-time-warning--up">⏱ Time is up — generating your report…</div>
+          <div className="va-time-warning va-time-warning--up">⏱ Time is up — {isMock && stationIdx < circuitRef.current.length - 1 ? 'moving to the next station…' : 'generating your report…'}</div>
         )}
 
         {/* Orb */}

@@ -12,7 +12,7 @@ import {
   normalizeQuestion,
   SAMPLE_CASE,
 } from './prompts/examiner.js'
-import { getRandomQuestion, getQuestionById, getTrainingPool, saveSession } from './db/repo.js'
+import { getRandomQuestion, getQuestionById, getTrainingPool, getCircuit, saveSession } from './db/repo.js'
 import { parseClinicalCase, jotformReady, listCaseForms, deriveExamType } from './integrations/jotform.js'
 import { supabase } from './db/supabase.js'
 
@@ -133,6 +133,21 @@ const MAINTENANCE_MSG =
 /*  The browser uses this token to open a WebRTC connection directly   */
 /*  to OpenAI. The real OPENAI_API_KEY never leaves this server.        */
 /* ------------------------------------------------------------------ */
+/* Generate a mock-exam circuit of sequential stations (#10/#16). */
+app.get('/api/mock/circuit', async (req, res) => {
+  try {
+    const count = req.query.count || 3
+    const pathway = req.query.pathway || ''
+    const examType = req.query.exam || req.query.examType || ''
+    const stations = await getCircuit({ count, pathway, examType })
+    if (!stations.length) return res.status(409).json({ maintenance: true, error: MAINTENANCE_MSG, stations: [] })
+    res.json({ stations })
+  } catch (err) {
+    console.error('Circuit error:', err)
+    res.status(500).json({ error: 'Could not generate a mock exam circuit.' })
+  }
+})
+
 app.post('/api/realtime/session', async (req, res) => {
   try {
     const { candidateName, examType = '', questionId, formId } = req.body || {}
