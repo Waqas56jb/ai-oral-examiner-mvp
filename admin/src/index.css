@@ -448,3 +448,7 @@ table.tbl { width: 100%; border-collapse: collapse; }
 @media (max-width: 560px) {
   .grid-4 { grid-template-columns: 1fr; }
 }
+
+/* Cohort benchmarking pass-rate bar */
+.bench-bar { display: inline-block; width: 80px; height: 7px; border-radius: 4px; background: #eef1f6; overflow: hidden; vertical-align: middle; margin-right: 8px; }
+.bench-bar span { display: block; height: 100%; border-radius: 4px; }
