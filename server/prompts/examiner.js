@@ -30,6 +30,24 @@ smoker (20 pack-years). His father had a myocardial infarction at 58.`,
   model_answer: '',
 }
 
+/**
+ * Exam-format guidance so the examiner runs the RIGHT style for each pathway and
+ * genuinely knows the difference (e.g. a RACGP CCE vs a StAMPS/ACRRM case).
+ * Matched loosely against the case's pathway/exam_type.
+ */
+const EXAM_FORMATS = [
+  { match: /cce|racgp/i, name: 'RACGP CCE', note: 'RACGP Clinical Competency Exam: 8 short structured cases, ~2 min reading + clinical encounter. Australian general-practice context. Emphasise patient-centred consultation, communication, in-consultation reasoning, safe community management and appropriate referral. Use the RACGP curriculum framing.' },
+  { match: /stamps|acrrm/i, name: 'StAMPS (ACRRM)', note: 'ACRRM StAMPS (Structured Assessment using Multiple Patient Scenarios): rural & remote generalist context. Candidate manages with limited resources, considers retrieval/transfer, prolonged care, and a broad undifferentiated scope. Probe rural decision-making, resourcefulness and safety.' },
+  { match: /amc/i, name: 'AMC Clinical', note: 'AMC Clinical exam: OSCE-style stations assessing a junior-doctor level of safe practice across disciplines. Focus on history, examination, investigation choice, management and clear communication to AMC standards.' },
+  { match: /pesci/i, name: 'PESCI', note: 'Pre-Employment Structured Clinical Interview: assesses readiness for Australian GP practice as an IMG. Probe scope of practice awareness, safety, communication and knowing limits.' },
+  { match: /osce|ranzcog|ranzco|college/i, name: 'College OSCE', note: 'Specialty college OSCE station: assess to the relevant college standard with structured, time-bound tasks.' },
+]
+function examFormatNote(pathway, examType) {
+  const hay = `${pathway || ''} ${examType || ''}`
+  const f = EXAM_FORMATS.find((x) => x.match.test(hay))
+  return f ? `\n# EXAM FORMAT — ${f.name}\nRun this station in the style of this exam: ${f.note}` : ''
+}
+
 /** The competency domains scored in the feedback report. */
 export const FEEDBACK_DOMAINS = [
   'Clinical Reasoning',
@@ -191,7 +209,7 @@ At the very start (once): briefly greet, ${candidateName ? `address the candidat
   const system = `${body}
 
 CASE DATA:
-Exam: ${exam}${c.pathway ? ` (${c.pathway})` : ''}
+Exam: ${exam}${c.pathway ? ` (${c.pathway})` : ''}${examFormatNote(c.pathway, exam)}
 Case Title: ${c.title}
 Case Scenario: ${c.scenario.replace(/\s+/g, ' ').trim()}${candidateBlock}
 ${c.vitals ? `Examiner Notes (reveal observations only if the candidate asks): ${c.vitals}` : ''}${questionsBlock}${patientBlock}
@@ -230,7 +248,7 @@ export function buildPoolInstructions({ categories = [], cases = [], candidateNa
     .map((c, i) => {
       const qs = Array.isArray(c.marking_criteria) ? c.marking_criteria : []
       const ps = String(c.patient_script || '').replace(/\s+/g, ' ').trim()
-      return `--- CASE ${i + 1} · AREA: ${c.exam_type} · "${c.title}" ---
+      return `--- CASE ${i + 1} · AREA: ${c.exam_type}${c.pathway ? ` · EXAM: ${c.pathway}` : ''} · "${c.title}" ---${examFormatNote(c.pathway, c.exam_type)}
 Scenario: ${String(c.stem || '').replace(/\s+/g, ' ').trim()}
 Questions to ask, in order:
 ${qs.map((q, j) => `  ${j + 1}. ${q}`).join('\n') || '  (use the scenario to form appropriate questions)'}${ps ? `\nPatient script (your eyes only — stay in character, reveal only when asked): ${ps}` : ''}`

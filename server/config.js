@@ -36,6 +36,10 @@ export const config = {
     'https://ai-oral-examiner-mvp-backend.vercel.app',
     'https://ai-oral-examiner-mvp-admin.vercel.app',
     'https://ai-oral-examiner-mvp-chatbot.vercel.app',
+    // Earlier deployment URLs (kept so existing bookmarks keep working)
+    'https://ai-oral-examiner-admin.vercel.app',
+    'https://ai-oral-examiner-backend.vercel.app',
+    'https://ai-oral-frontend.vercel.app',
     // Extra origins from the environment (PassGP / Kajabi domains)
     ...String(process.env.ALLOWED_ORIGINS || '')
       .split(',')

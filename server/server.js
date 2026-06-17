@@ -92,6 +92,10 @@ async function chatCreate(params, options) {
 
 const app = express()
 app.use(express.json({ limit: '1mb' }))
+// Our own Vercel deployments (admin / chatbot / backend) — old, new and preview
+// aliases all share this prefix. Matching the pattern avoids "Load failed" when
+// a deployment URL changes.
+const OWN_VERCEL = /^https:\/\/ai-oral[a-z0-9-]*\.vercel\.app$/
 app.use(
   cors({
     origin(origin, cb) {
@@ -99,7 +103,7 @@ app.use(
       // checks). These can't be used for browser CSRF, so allow them.
       if (!origin) return cb(null, true)
       const clean = origin.replace(/\/$/, '')
-      if (config.allowedOrigins.includes(clean)) return cb(null, true)
+      if (config.allowedOrigins.includes(clean) || OWN_VERCEL.test(clean)) return cb(null, true)
       // Disallowed browser origin → block (no CORS headers sent).
       return cb(null, false)
     },
