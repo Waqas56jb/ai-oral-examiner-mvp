@@ -206,7 +206,7 @@
       <li><a href="#">Pricing</a></li>
       <li><a href="#">Docs</a></li>
       <li><a href="#embed">Embed</a></li>
-      <li><a href="https://ai-oral-frontend.vercel.app/" target="_blank" class="nav-cta">Open Examiner</a></li>
+      <li><a href="https://ai-oral-examiner-mvp-chatbot.vercel.app/" target="_blank" class="nav-cta">Open Examiner</a></li>
     </ul>
   </nav>
 
@@ -253,7 +253,7 @@
       </div>
       <pre id="embed-code"><span class="tk-comm">&lt;!-- PassGP AI Oral Examiner Widget --&gt;</span>
 <span class="tk-tag">&lt;script</span>
-  <span class="tk-attr">src</span>=<span class="tk-str">"https://ai-oral-frontend.vercel.app/widget.js"</span>
+  <span class="tk-attr">src</span>=<span class="tk-str">"https://ai-oral-examiner-mvp-chatbot.vercel.app/widget.js"</span>
   <span class="tk-attr">defer</span>
 <span class="tk-tag">&gt;&lt;/script&gt;</span></pre>
     </div>
@@ -269,7 +269,7 @@
         <button class="copy-btn" onclick="copyIframe(this)">Copy</button>
       </div>
       <pre id="iframe-code"><span class="tk-tag">&lt;iframe</span>
-  <span class="tk-attr">src</span>=<span class="tk-str">"https://ai-oral-frontend.vercel.app"</span>
+  <span class="tk-attr">src</span>=<span class="tk-str">"https://ai-oral-examiner-mvp-chatbot.vercel.app"</span>
   <span class="tk-attr">width</span>=<span class="tk-str">"390"</span>
   <span class="tk-attr">height</span>=<span class="tk-str">"700"</span>
   <span class="tk-attr">style</span>=<span class="tk-str">"border:none;border-radius:28px;box-shadow:0 8px 40px rgba(0,0,0,0.18)"</span>
@@ -284,14 +284,14 @@
 
   <script>
     function copyEmbed(btn) {
-      const text = `<!-- PassGP AI Oral Examiner Widget -->\n<script src="https://ai-oral-frontend.vercel.app/widget.js" defer><\/script>`;
+      const text = `<!-- PassGP AI Oral Examiner Widget -->\n<script src="https://ai-oral-examiner-mvp-chatbot.vercel.app/widget.js" defer><\/script>`;
       navigator.clipboard.writeText(text).then(() => {
         btn.textContent = 'Copied!';
         setTimeout(() => btn.textContent = 'Copy', 2000);
       });
     }
     function copyIframe(btn) {
-      const text = `<iframe\n  src="https://ai-oral-frontend.vercel.app"\n  width="390"\n  height="700"\n  style="border:none;border-radius:28px;box-shadow:0 8px 40px rgba(0,0,0,0.18)"\n  allow="microphone"\n  title="PassGP AI Oral Examiner"\n></iframe>`;
+      const text = `<iframe\n  src="https://ai-oral-examiner-mvp-chatbot.vercel.app"\n  width="390"\n  height="700"\n  style="border:none;border-radius:28px;box-shadow:0 8px 40px rgba(0,0,0,0.18)"\n  allow="microphone"\n  title="PassGP AI Oral Examiner"\n></iframe>`;
       navigator.clipboard.writeText(text).then(() => {
         btn.textContent = 'Copied!';
         setTimeout(() => btn.textContent = 'Copy', 2000);

@@ -23,11 +23,16 @@ export const config = {
   // --- Audio transcription (so user speech appears in the transcript) ---
   transcriptionModel: 'whisper-1',
 
-  // CORS — allow the Vite dev server and same-origin by default
+  // CORS — allow the Vite dev servers and the live deployed apps
   allowedOrigins: [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     'http://localhost:4173',
+    'http://localhost:5174',
+    // Live deployments (client account)
+    'https://ai-oral-examiner-mvp-backend.vercel.app',
+    'https://ai-oral-examiner-mvp-admin.vercel.app',
+    'https://ai-oral-examiner-mvp-chatbot.vercel.app',
   ],
 }
 

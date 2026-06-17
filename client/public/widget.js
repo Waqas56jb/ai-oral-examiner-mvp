@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const WIDGET_URL  = 'https://ai-oral-frontend.vercel.app';
+  const WIDGET_URL  = 'https://ai-oral-examiner-mvp-chatbot.vercel.app';
   const ACCENT      = '#6366f1';
   const ACCENT_DARK = '#4f46e5';
   const FONT_URL    = 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&display=swap';
