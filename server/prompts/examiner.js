@@ -89,10 +89,38 @@ export function normalizeQuestion(q) {
 }
 
 /**
- * Build the examiner system instructions.
- * @param {{ examType?: string, candidateName?: string, forVoice?: boolean, question?: object }} opts
+ * The role section, driven by the admin "Examiner mode" setting.
+ *   examiner → pure examiner (no patient role-play)
+ *   patient  → pure patient simulation (no quizzing/assessing)
+ *   both     → seamless dual role (default)
  */
-export function buildExaminerInstructions({ examType, candidateName = '', forVoice = false, question } = {}) {
+function roleSectionFor(mode) {
+  if (mode === 'examiner') {
+    return `# YOUR ROLE: EXAMINER ONLY
+You are the examiner. Set the scene, ask questions, probe the candidate's reasoning and assess. Do NOT role-play the patient — if the candidate asks the patient something, briefly relay it as the examiner ("On examination, you find…", "The patient tells you…").`
+  }
+  if (mode === 'patient') {
+    return `# YOUR ROLE: PATIENT SIMULATION ONLY
+You ONLY play the patient (or a relative). Stay fully in character, in the first person, the entire time — you are NOT an examiner and must NOT quiz, probe, assess or give feedback during the consultation. Let the candidate lead. Respond exactly as a real patient would.
+Information disclosure: reveal information ONLY when the candidate specifically and appropriately asks. NEVER volunteer key findings, red flags, hidden concerns or the diagnosis. To an open question give a realistic, partial answer and make them probe for detail.`
+  }
+  return `# YOU PLAY TWO ROLES — EXAMINER **and** PATIENT (switch seamlessly, automatically)
+- THE PATIENT: the MOMENT the candidate starts taking a history, examining, or speaking to the patient, you ARE the patient — answer in the first person, naturally and briefly, like a real person. Do this AUTOMATICALLY; never wait to be told to "act as the patient".
+- THE EXAMINER: step into the examiner's voice only to set the scene, probe the candidate's reasoning between sections, and close.
+Information disclosure (as the patient): reveal information ONLY when specifically and appropriately asked. NEVER volunteer key findings, red flags or the diagnosis — make the candidate probe for it.`
+}
+
+/**
+ * Build the examiner system instructions.
+ * @param {{ examType?: string, candidateName?: string, forVoice?: boolean, question?: object, aiConfig?: object }} opts
+ *
+ * aiConfig (admin-controlled, from app_settings.ai_config) lets PassGP steer the
+ * model live without code changes:
+ *   - mode: 'both' | 'examiner' | 'patient'      (default 'both')
+ *   - examinerInstructions: free-text directives appended at HIGH priority
+ *   - systemPromptOverride: replaces the default persona/flow entirely
+ */
+export function buildExaminerInstructions({ examType, candidateName = '', forVoice = false, question, aiConfig = {} } = {}) {
   const c = normalizeQuestion(question)
   const exam = examType || c.examType
   const criteria = c.markingCriteria.length ? c.markingCriteria : SAMPLE_CASE.marking_criteria
@@ -106,15 +134,14 @@ export function buildExaminerInstructions({ examType, candidateName = '', forVoi
   ]
     .filter(Boolean)
     .join('\n')
-  // Patient simulation (#6/#7): if a patient script exists, the examiner ALSO
-  // role-plays the patient — revealing information only when appropriately asked.
-  const patientBlock = c.patientScript
-    ? `\n\nPATIENT SIMULATION (important):
-When the candidate takes a history or speaks to the patient, you also PLAY THE PATIENT using the script below. Stay in character as the patient, answer naturally, and ONLY reveal a piece of information when the candidate specifically and appropriately asks for it — never volunteer key findings or the diagnosis. Switch back to the examiner voice for follow-up questions.
-PATIENT SCRIPT (your eyes only): ${c.patientScript}`
-    : ''
+
+  const mode = (aiConfig.mode || 'both').toLowerCase()
+  const roleSection = roleSectionFor(mode)
   const candidateBlock = c.candidateInstructions
     ? `\nCandidate instructions (read/paraphrase to the candidate at the start): ${c.candidateInstructions}`
+    : ''
+  const patientBlock = c.patientScript
+    ? `\nPATIENT SCRIPT (your eyes only — BE this patient; reveal only when appropriately asked, never volunteer key findings or the diagnosis): ${c.patientScript.replace(/\s+/g, ' ').trim()}`
     : ''
   const questionsBlock = c.questions.length
     ? `\nQuestions to put to the candidate — ask these IN ORDER, one at a time, and probe deeply after each answer before moving to the next:\n${c.questions
@@ -122,62 +149,38 @@ PATIENT SCRIPT (your eyes only): ${c.patientScript}`
         .join('\n')}`
     : ''
 
-  const system = `
-You are PassGP AI Oral Examiner, an experienced senior medical examiner conducting postgraduate medical oral examinations.
+  // Follow the CASE's own structure (Jotform fields) rather than forcing a fixed format.
+  const hasOwnStructure = !!(c.candidateInstructions || c.patientScript || c.questions.length || c.examinerInstructions)
 
-Your role is to simulate a realistic oral examination environment for doctors preparing for RACGP, ACRRM, AMC, PESCI, and related medical exams.
+  const override = (aiConfig.systemPromptOverride || '').trim()
+  const adminDirectives = (aiConfig.examinerInstructions || '').trim()
 
-# YOU PLAY TWO ROLES: EXAMINER **and** PATIENT
-In clinical/oral stations you act as BOTH:
-- THE EXAMINER — you set the scene, ask questions, probe the candidate's reasoning, and assess.
-- THE PATIENT (or a relative) — when the candidate takes a history, examines, or talks to the patient, you BECOME the patient and answer IN CHARACTER, in the first person, naturally and briefly — like a real person, not a textbook.
-Switch fluidly: speak as the patient when being interviewed, and step back into the examiner's voice for instructions, probing and follow-ups. In voice it should feel like the candidate is genuinely talking to a real patient.
+  const defaultBody = `
+You are PassGP AI Oral Examiner, an experienced senior medical examiner conducting postgraduate medical oral examinations for doctors preparing for RACGP, ACRRM, AMC, PESCI and related exams.
 
-# INFORMATION DISCLOSURE (as the patient — critical)
-- Reveal information ONLY when the candidate specifically and appropriately asks for it.
-- NEVER volunteer key findings, red flags, hidden concerns, or the diagnosis — a real patient does not list everything at once.
-- To an open question, give a realistic, partial answer; make the candidate probe for the detail.
-- If they ask the right question, answer it truthfully. If they don't ask, don't tell.
-- Use the PATIENT SCRIPT in CASE DATA if provided; otherwise improvise a consistent, realistic patient from the scenario.
+${roleSection}
 
-RULES:
-1. Remain in examiner mode at all times.
-2. Do not provide answers unless the examination has ended.
-3. Ask one question at a time.
-4. Wait for the candidate's response before proceeding.
-5. Challenge weak or incomplete answers with follow-up questions.
-6. Assess clinical reasoning, patient safety, communication, diagnosis, investigation, and management skills.
-7. Maintain a professional and supportive tone.
-8. Never reveal scoring or marking criteria during the examination.
-9. Never break character. Never behave like a generic chatbot or assistant.
-10. If the candidate asks for the answer during the exam, politely state that feedback will be provided after the assessment, then continue.
-11. You have full memory of this conversation — remember the candidate's name, their exam, and every answer, and build on what they have already said.
-12. GREET ONLY ONCE. Introduce yourself a single time at the very start. After that first greeting you must NEVER greet, welcome, say "hello/hi", or re-introduce yourself again — pick up exactly where the conversation left off and continue the examination.
-13. If you receive silence, background noise, or an empty/unclear input, do NOT restart and do NOT greet again. Simply wait, or gently say "Take your time" / "Go ahead whenever you're ready", then continue from the current question.
+# FOLLOW THE CASE, NOT A FIXED SCRIPT
+${hasOwnStructure
+  ? 'This case defines its OWN structure (candidate instructions, patient script and/or a question list in CASE DATA). FOLLOW THAT structure exactly — do not impose a different format or invent extra phases. Use the case as written.'
+  : 'No fixed structure is provided for this case, so run it naturally: set the scene from the scenario, then explore the candidate\'s reasoning with your own questions.'}
+Be flexible and conversational — adapt to how the candidate responds rather than marching through rigid stages.
 
-EXAM FLOW:
+# CORE RULES
+- Ask ONE thing at a time, then stop and listen. Wait for the answer before continuing.
+- You ASK and PROBE; the candidate answers. Never answer clinical questions for them and never read out the marking key or model answers.
+- Challenge vague or incomplete answers with follow-ups. Keep a professional, supportive tone.
+- Never reveal scores or marking criteria during the exam. If asked for the answer, say feedback comes afterwards, then continue.
+- You have full memory of this conversation — remember the candidate's name, exam and every answer; build on them, never repeat a question.
+- GREET ONLY ONCE at the very start, then NEVER greet or re-introduce yourself again. On silence/noise, wait patiently ("Take your time") — do not restart or re-greet.
+- Never break character or behave like a generic chatbot/assistant.
 
-Phase 1 — Introduction (happens ONCE, only at the very start)
-- Greet the candidate warmly and introduce yourself as their examiner — ONE time only.
-- FIRST, ask the candidate's name ("Before we begin, may I have your name?") and use it during the exam.
-- Then ask which exam/college they are preparing for and how their preparation is going. Listen.
-- Explain that a short oral assessment will now begin and they should think out loud.
-- After this, move into the case and NEVER greet or re-introduce yourself again.
+# START
+At the very start (once): briefly greet, ${candidateName ? `address the candidate as ${candidateName}, ` : 'ask the candidate\'s name, '}confirm the area, then begin the case. When the candidate says they are finished, give a short spoken summary of how they did (no numeric scores aloud — a written report is generated separately).`.trim()
 
-Phase 2 — Case Presentation
-- Present the clinical scenario clearly and concisely (see CASE DATA below).
+  const body = override || defaultBody
 
-Phase 3 — Interactive Examination
-- If a list of questions is provided in CASE DATA, work through them IN ORDER (still one at a time). Otherwise ask questions based on the case.
-- Generate follow-up questions dynamically from the candidate's responses.
-- Probe deeper when responses are incomplete or vague.
-- Explore differential diagnosis, investigations, management, patient safety, and communication.
-- You ASK and PROBE; the candidate answers. Never answer for them, and never read out the model answers.
-
-Phase 4 — Closing (spoken)
-- When the candidate indicates they are finished, stop examining and give a brief,
-  professional spoken summary of how they did and the key points to work on.
-- Do NOT read out numeric scores aloud — a detailed scored report is generated separately.
+  const system = `${body}
 
 CASE DATA:
 Exam: ${exam}${c.pathway ? ` (${c.pathway})` : ''}
@@ -187,11 +190,8 @@ ${c.vitals ? `Examiner Notes (reveal observations only if the candidate asks): $
 
 MARKING KEY (EXAMINER ONLY — NEVER reveal, read out, or hint any of this to the candidate; use it silently to judge and to write feedback):
 ${markingKey}
-
-Expected Competencies: Clinical reasoning, differential diagnosis, investigations, management, patient safety, and communication.
-
-Always behave like a real medical examiner. Never act as a chatbot.
-`.trim()
+${adminDirectives ? `\n# ADMIN DIRECTIVES — set by PassGP. These take PRIORITY over the general guidance above. Obey them:\n${adminDirectives}\n` : ''}
+Always behave like a real medical examiner. Never act as a chatbot.`.trim()
 
   if (!forVoice) return system
 
@@ -212,9 +212,12 @@ VOICE & DELIVERY (this is a LIVE spoken exam — critical):
  * The examiner KNOWS which areas are available, tells the candidate, runs a
  * case from the chosen area, and politely defers areas that aren't trained yet.
  */
-export function buildPoolInstructions({ categories = [], cases = [], candidateName = '', forVoice = true } = {}) {
+export function buildPoolInstructions({ categories = [], cases = [], candidateName = '', forVoice = true, aiConfig = {} } = {}) {
   const areas = categories.join(', ')
   const greetingName = candidateName ? ` ${candidateName}` : ''
+  const mode = (aiConfig.mode || 'both').toLowerCase()
+  const adminDirectives = (aiConfig.examinerInstructions || '').trim()
+  const override = (aiConfig.systemPromptOverride || '').trim()
   const caseBlocks = cases
     .map((c, i) => {
       const qs = Array.isArray(c.marking_criteria) ? c.marking_criteria : []
@@ -226,13 +229,12 @@ ${qs.map((q, j) => `  ${j + 1}. ${q}`).join('\n') || '  (use the scenario to for
     })
     .join('\n\n')
 
-  const system = `
+  const base = override || `
 You are PassGP AI Oral Examiner, an experienced senior medical examiner running postgraduate medical oral examinations.
 
-# YOU PLAY TWO ROLES: EXAMINER **and** PATIENT
-- THE EXAMINER — set the scene, ask questions, probe, assess.
-- THE PATIENT (or relative) — when the candidate takes a history or talks to the patient, you BECOME the patient: answer in the first person, naturally and briefly, like a real person.
-Information disclosure: as the patient, reveal information ONLY when the candidate specifically and appropriately asks. NEVER volunteer key findings, red flags or the diagnosis. Make them probe. Use a case's patient script if given, else improvise realistically from the scenario.
+${roleSectionFor(mode)}`
+
+  const system = `${base}
 
 # AVAILABLE EXAM AREAS (you can ONLY examine on these)
 ${areas || '(none configured)'}
@@ -259,11 +261,11 @@ ${caseBlocks}
 - Remember everything the candidate says; never repeat a question.
 
 # RULES
-- Remain in examiner mode. Never break character or behave like a generic chatbot.
+- Never break character or behave like a generic chatbot.
 - Greet only ONCE; never re-greet or re-introduce yourself afterwards.
 - If you receive silence or noise, wait patiently — do not restart or re-greet.
 - This is a training simulation, not real medical advice.
-`.trim()
+${adminDirectives ? `\n# ADMIN DIRECTIVES — set by PassGP. These take PRIORITY over the guidance above. Obey them:\n${adminDirectives}\n` : ''}`.trim()
 
   if (!forVoice) return system
 

@@ -37,15 +37,26 @@ export async function getRandomQuestion(examType) {
  * The examiner uses this to tell the candidate which areas it can test, and to
  * run a case from the area the candidate chooses.
  */
-export async function getTrainingPool(maxCategories = 16) {
+export async function getTrainingPool(maxCategories = 16, focusCategory = '') {
   if (!supabase) return { categories: [], cases: [] }
   try {
-    const { data } = await supabase
+    let q = supabase
       .from('exam_questions')
       .select('id, title, exam_type, stem, marking_criteria, patient_script')
       .eq('is_active', true)
       .eq('in_training', true)
       .limit(3000)
+    // Admin "focus on one exam" lock: restrict the pool to a single area.
+    if (focusCategory) q = q.eq('exam_type', focusCategory)
+    let { data } = await q
+    // If the focus area has no trained cases, fall back to the whole set.
+    if (focusCategory && !data?.length) {
+      const all = await supabase
+        .from('exam_questions')
+        .select('id, title, exam_type, stem, marking_criteria, patient_script')
+        .eq('is_active', true).eq('in_training', true).limit(3000)
+      data = all.data
+    }
     if (!data?.length) return { categories: [], cases: [] }
 
     const byCat = new Map()

@@ -153,6 +153,10 @@ app.post('/api/realtime/session', async (req, res) => {
   try {
     const { candidateName, examType = '', questionId, formId } = req.body || {}
 
+    const aiConfig = await getAIConfig()
+    // Admin can lock the examiner to a single exam area (#2).
+    const focusExam = (aiConfig.focusExam || '').trim()
+
     let instructions
     let meta
     if (formId || questionId) {
@@ -160,7 +164,7 @@ app.post('/api/realtime/session', async (req, res) => {
       const rawCase = await resolveCase({ formId, questionId, examType })
       if (!rawCase) return res.status(409).json({ maintenance: true, error: MAINTENANCE_MSG })
       const question = normalizeQuestion(rawCase)
-      instructions = buildExaminerInstructions({ examType: question.examType, candidateName, forVoice: true, question: rawCase })
+      instructions = buildExaminerInstructions({ examType: question.examType, candidateName, forVoice: true, question: rawCase, aiConfig })
       meta = {
         questionId: question.source === 'db' ? question.id : null,
         formId: formId || null,
@@ -170,12 +174,12 @@ app.post('/api/realtime/session', async (req, res) => {
         durationSeconds: Number(rawCase.duration_seconds) > 0 ? Number(rawCase.duration_seconds) : 480,
       }
     } else {
-      // Adaptive, category-aware session across the whole training set:
-      // the examiner knows the available areas and runs the candidate's choice.
-      const pool = await getTrainingPool()
+      // Adaptive, category-aware session across the training set (optionally
+      // locked to a single admin-chosen exam area).
+      const pool = await getTrainingPool(16, focusExam || examType || '')
       if (!pool.cases.length) return res.status(409).json({ maintenance: true, error: MAINTENANCE_MSG })
-      instructions = buildPoolInstructions({ categories: pool.categories, cases: pool.cases, candidateName, forVoice: true })
-      meta = { questionId: null, formId: null, questionTitle: 'Adaptive training session', examType: '', categories: pool.categories, durationSeconds: 900 }
+      instructions = buildPoolInstructions({ categories: pool.categories, cases: pool.cases, candidateName, forVoice: true, aiConfig })
+      meta = { questionId: null, formId: null, questionTitle: 'Adaptive training session', examType: focusExam || '', categories: pool.categories, durationSeconds: 900 }
     }
 
     const sessionBody = JSON.stringify({
@@ -271,7 +275,7 @@ app.post('/api/chat', async (req, res) => {
   req.on('close', () => controller.abort())
 
   try {
-    const systemPrompt = buildExaminerInstructions({ examType, candidateName, forVoice: false })
+    const systemPrompt = buildExaminerInstructions({ examType, candidateName, forVoice: false, aiConfig: await getAIConfig() })
 
     const stream = await chatCreate(
       {

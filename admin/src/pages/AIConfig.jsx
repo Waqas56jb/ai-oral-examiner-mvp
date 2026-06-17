@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { FiCpu, FiSave, FiCheck, FiAlertCircle, FiMic, FiSliders } from 'react-icons/fi'
+import { FiCpu, FiSave, FiCheck, FiAlertCircle, FiMic, FiSliders, FiUserCheck, FiTarget } from 'react-icons/fi'
 import { supabase } from '../lib/supabase'
 import { Card, Button, PageLoader, Field } from '../components/ui'
 
@@ -7,10 +7,16 @@ const VOICES = ['marin', 'cedar', 'sage', 'verse', 'alloy', 'ash', 'coral', 'shi
 const DIFFICULTY = ['gentle', 'standard', 'rigorous']
 const REALTIME_MODELS = ['gpt-realtime', 'gpt-4o-realtime-preview-2024-12-17']
 const CHAT_MODELS = ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1']
-const defaults = { voice: 'marin', difficulty: 'standard', realtimeModel: 'gpt-realtime', chatModel: 'gpt-4o-mini', examinerInstructions: '', systemPromptOverride: '' }
+const MODES = [
+  { value: 'both', label: 'Examiner + Patient (dual role)' },
+  { value: 'examiner', label: 'Examiner only' },
+  { value: 'patient', label: 'Patient simulation only' },
+]
+const defaults = { voice: 'marin', difficulty: 'standard', realtimeModel: 'gpt-realtime', chatModel: 'gpt-4o-mini', mode: 'both', focusExam: '', examinerInstructions: '', systemPromptOverride: '' }
 
 export default function AIConfig() {
   const [cfg, setCfg] = useState(null)
+  const [cats, setCats] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -20,6 +26,9 @@ export default function AIConfig() {
     ;(async () => {
       const { data } = await supabase.from('app_settings').select('value').eq('key', 'ai_config').maybeSingle()
       setCfg({ ...defaults, ...(data?.value || {}) })
+      // Distinct exam areas currently in the training set (for the focus selector).
+      const { data: qs } = await supabase.from('exam_questions').select('exam_type').eq('is_active', true).eq('in_training', true).limit(3000)
+      setCats([...new Set((qs || []).map((r) => (r.exam_type || '').trim()).filter(Boolean))].sort())
       setLoading(false)
     })()
   }, [])
@@ -65,6 +74,29 @@ export default function AIConfig() {
             </select>
           </Field>
           <p className="muted" style={{ fontSize: '0.82rem', marginTop: 10 }}>“Rigorous” probes harder and accepts fewer vague answers.</p>
+        </Card>
+      </div>
+
+      <div className="grid grid-2" style={{ marginBottom: 20 }}>
+        <Card title={<span><FiUserCheck style={{ verticalAlign: '-2px' }} /> Examiner role</span>} sub="Make her an examiner, a patient, or both">
+          <Field label="Role mode">
+            <select className="select" value={cfg.mode} onChange={(e) => set('mode', e.target.value)}>
+              {MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+          </Field>
+          <p className="muted" style={{ fontSize: '0.82rem', marginTop: 10 }}>
+            <strong>Patient simulation only</strong> = she stays fully in character as the patient and never quizzes — true history-taking practice. <strong>Dual</strong> = she becomes the patient automatically when interviewed, no prompting needed.
+          </p>
+        </Card>
+
+        <Card title={<span><FiTarget style={{ verticalAlign: '-2px' }} /> Focus on one exam</span>} sub="Lock the examiner to a single exam area">
+          <Field label="Exam area">
+            <select className="select" value={cfg.focusExam} onChange={(e) => set('focusExam', e.target.value)}>
+              <option value="">— All trained areas (let candidate choose) —</option>
+              {cats.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </Field>
+          <p className="muted" style={{ fontSize: '0.82rem', marginTop: 10 }}>When set, every adaptive session runs ONLY this area. Per-case embeds (?formId=) always run their own case.</p>
         </Card>
       </div>
 
