@@ -360,6 +360,8 @@ app.post('/api/feedback', async (req, res) => {
         candidateName: (candidateName && candidateName.trim()) || report.candidate_name || null,
         candidateEmail: (candidateEmail && candidateEmail.trim()) || null,
         pathway: (pathway && pathway.trim()) || (rawCase ? question.pathway : '') || null,
+        formId: formId || null,
+        caseTitle: rawCase ? question.title : null,
         feedback: {
           score: report.score, // 0-100
           result: report.result,
@@ -768,6 +770,100 @@ app.post('/api/admin/auth/admin-reset-password', requireAdmin, async (req, res) 
     const { error } = await supabase.auth.admin.updateUserById(target.id, { password })
     if (error) return res.status(500).json({ error: error.message })
     res.json({ ok: true })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+/* ------------------------------------------------------------------ */
+/*  ANALYTICS EXPORT (#14) — flat, Power BI-ready rows                  */
+/* ------------------------------------------------------------------ */
+function toAnalyticsRow(s) {
+  const ai10 = s.score != null ? Math.round(s.score / 10) : ''
+  const ov10 = s.score_override != null ? Math.round(s.score_override / 10) : ''
+  return {
+    session_id: s.id,
+    datetime: s.created_at,
+    candidate_name: s.candidate_name || '',
+    candidate_email: s.candidate_email || '',
+    pathway: s.pathway || '',
+    category: s.exam_type || '',
+    case_id: s.question_id || '',
+    form_id: s.form_id || '',
+    case_title: s.case_title || '',
+    duration_seconds: s.duration_sec || 0,
+    duration_minutes: s.duration_sec ? Math.round(s.duration_sec / 60) : 0,
+    marks_awarded: s.marks_awarded ?? '',
+    total_marks: s.total_marks ?? '',
+    score_percent: s.score ?? '',
+    ai_score_10: ai10,
+    score_override_10: ov10,
+    final_pass_fail: s.pass_fail || s.result || '',
+    killer_failed: s.killer_failed ? 'yes' : 'no',
+    reviewed: s.reviewed ? 'yes' : 'no',
+    missed_rubric_items: Array.isArray(s.missed_items) ? s.missed_items.join(' | ') : '',
+    unsafe_areas: Array.isArray(s.unsafe_areas) ? s.unsafe_areas.join(' | ') : '',
+  }
+}
+
+async function fetchAnalyticsRows() {
+  if (!supabase) return []
+  let all = []
+  let from = 0
+  while (true) {
+    const { data, error } = await supabase
+      .from('exam_sessions')
+      .select('id, created_at, candidate_name, candidate_email, pathway, exam_type, question_id, form_id, case_title, duration_sec, marks_awarded, total_marks, score, score_override, pass_fail, result, killer_failed, reviewed, missed_items, unsafe_areas')
+      .eq('status', 'completed')
+      .order('created_at', { ascending: false })
+      .range(from, from + 999)
+    if (error) throw new Error(error.message)
+    all = all.concat(data || [])
+    if (!data || data.length < 1000) break
+    from += 1000
+  }
+  return all.map(toAnalyticsRow)
+}
+
+function rowsToCsv(rows) {
+  if (!rows.length) return ''
+  const cols = Object.keys(rows[0])
+  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+  return [cols.map(esc).join(','), ...rows.map((r) => cols.map((c) => esc(r[c])).join(','))].join('\n')
+}
+
+// Admin (session-authenticated): JSON rows for the in-app export button.
+app.get('/api/admin/analytics/export', requireAdmin, async (_req, res) => {
+  try {
+    const rows = await fetchAnalyticsRows()
+    res.json({ rows, total: rows.length })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// API-key protected (for Power BI / external BI tools to pull directly).
+// Set the key via ANALYTICS_API_KEY env, or app_settings.analytics_api_key.
+async function getAnalyticsKey() {
+  if (process.env.ANALYTICS_API_KEY) return process.env.ANALYTICS_API_KEY
+  try {
+    const { data } = await supabase.from('app_settings').select('value').eq('key', 'analytics_api_key').maybeSingle()
+    return data?.value?.key || null
+  } catch {
+    return null
+  }
+}
+app.get('/api/analytics/export', async (req, res) => {
+  try {
+    const key = await getAnalyticsKey()
+    if (!key) return res.status(503).json({ error: 'Analytics API key not configured' })
+    const provided = req.get('x-api-key') || req.query.key
+    if (provided !== key) return res.status(401).json({ error: 'Invalid API key' })
+    const rows = await fetchAnalyticsRows()
+    if ((req.query.format || 'csv') === 'json') return res.json({ rows, total: rows.length })
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', 'attachment; filename="passgp-analytics.csv"')
+    res.send(rowsToCsv(rows))
   } catch (e) {
     res.status(500).json({ error: e.message })
   }

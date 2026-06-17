@@ -4,9 +4,10 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, AreaChart, Area,
 } from 'recharts'
 import { supabase } from '../lib/supabase'
+import { apiGet } from '../lib/api'
 import { Card, PageLoader, EmptyState, Button } from '../components/ui'
 import { toCsv, downloadFile } from '../lib/format'
-import { FiBarChart2, FiDownload } from 'react-icons/fi'
+import { FiBarChart2, FiDownload, FiDatabase } from 'react-icons/fi'
 
 const COLORS = ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#3b82f6']
 
@@ -99,6 +100,23 @@ export default function Analytics() {
     downloadFile(`passgp-analytics-${Date.now()}.csv`, csv, 'text/csv')
   }
 
+  const [exportingBI, setExportingBI] = useState(false)
+  // Full session-level, Power BI-ready export (one row per attempt, all fields).
+  const exportPowerBI = async () => {
+    setExportingBI(true)
+    try {
+      const { rows } = await apiGet('/api/admin/analytics/export')
+      if (!rows?.length) return
+      const headers = Object.keys(rows[0]).map((k) => ({ label: k, key: k }))
+      downloadFile(`passgp-powerbi-sessions-${Date.now()}.csv`, toCsv(rows, headers), 'text/csv')
+    } catch (e) {
+      // eslint-disable-next-line no-alert
+      alert('Export failed: ' + e.message)
+    } finally {
+      setExportingBI(false)
+    }
+  }
+
   if (loading) return <PageLoader />
   if (empty) {
     return (
@@ -110,7 +128,10 @@ export default function Analytics() {
     <>
       <div className="page-head">
         <div><h2>Analytics</h2><p>Performance, progression & cohort benchmarking</p></div>
-        <div className="page-actions"><Button variant="ghost" icon={<FiDownload />} onClick={exportCsv}>Export cohort CSV</Button></div>
+        <div className="page-actions">
+          <Button variant="ghost" icon={<FiDownload />} onClick={exportCsv}>Export cohort CSV</Button>
+          <Button variant="ghost" loading={exportingBI} icon={<FiDatabase />} onClick={exportPowerBI}>Power BI export</Button>
+        </div>
       </div>
 
       <div className="grid grid-2" style={{ marginBottom: 20 }}>
