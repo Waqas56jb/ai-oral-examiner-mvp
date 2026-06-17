@@ -3,7 +3,7 @@ import {
   FiPlus, FiEdit2, FiTrash2, FiEye, FiChevronRight, FiChevronLeft, FiLayers, FiCheck, FiAlertCircle,
 } from 'react-icons/fi'
 import { supabase } from '../lib/supabase'
-import { apiGet, apiPost } from '../lib/api'
+import { apiGet, apiPost, apiPut, apiDelete } from '../lib/api'
 import { Card, Button, IconButton, Badge, Search, EmptyState, PageLoader, Modal } from '../components/ui'
 import QuestionForm, { rowToForm, formToPayload, blankQuestion } from '../components/QuestionForm'
 
@@ -74,17 +74,9 @@ export default function Training() {
     if (!ids.length) return
     setBusy(true); setError('')
     try {
-      try {
-        // Preferred: backend (service key) — bulletproof persistence
-        await apiPost('/api/admin/training/set', { ids, in_training: value })
-      } catch {
-        // Fallback: direct Supabase update (works without backend redeploy)
-        for (let i = 0; i < ids.length; i += 500) {
-          const chunk = ids.slice(i, i + 500)
-          const { error } = await supabase.from('exam_questions').update({ in_training: value }).in('id', chunk)
-          if (error) throw error
-        }
-      }
+      // Writes go through the protected backend (service key) — anon writes are
+      // blocked by RLS for security.
+      await apiPost('/api/admin/training/set', { ids, in_training: value })
       setDocs((ds) => ds.map((d) => (ids.includes(d.id) ? { ...d, in_training: value } : d)))
       setSel({})
     } catch (e) {
@@ -94,7 +86,7 @@ export default function Training() {
     }
   }
 
-  const fetchFull = async (id) => (await supabase.from('exam_questions').select('*').eq('id', id).single()).data
+  const fetchFull = async (id) => (await apiGet(`/api/admin/questions/${id}`)).question
 
   const view = async (d) => setViewing((await fetchFull(d.id)) || d)
   const openEdit = async (d) => {
@@ -108,18 +100,21 @@ export default function Training() {
     if (!f.title.trim() || !f.stem.trim()) { setError('Title and scenario are required.'); return }
     setBusy(true); setError('')
     const payload = formToPayload(f)
-    let err
-    if (editing.id) {
-      err = (await supabase.from('exam_questions').update(payload).eq('id', editing.id)).error
-    } else {
-      err = (await supabase.from('exam_questions').insert({ ...payload, in_training: true }).select('id').single()).error
+    try {
+      if (editing.id) await apiPut(`/api/admin/questions/${editing.id}`, payload)
+      else await apiPost('/api/admin/questions', { ...payload, in_training: true })
+      setEditing(null); load()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
     }
-    setBusy(false)
-    if (err) { setError(err.message); return }
-    setEditing(null); load()
   }
 
-  const doDelete = async () => { await supabase.from('exam_questions').delete().eq('id', confirmDel.id); setConfirmDel(null); load() }
+  const doDelete = async () => {
+    try { await apiDelete(`/api/admin/questions/${confirmDel.id}`) } catch (e) { setError(e.message) }
+    setConfirmDel(null); load()
+  }
 
   if (docs === null) return <PageLoader />
 

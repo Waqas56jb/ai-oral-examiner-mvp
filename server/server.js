@@ -10,7 +10,6 @@ import {
   buildGraderSystem,
   buildFeedbackUserPrompt,
   normalizeQuestion,
-  SAMPLE_CASE,
 } from './prompts/examiner.js'
 import { getRandomQuestion, getQuestionById, getTrainingPool, getCircuit, saveSession } from './db/repo.js'
 import { sendSessionSummary } from './email.js'
@@ -95,9 +94,13 @@ app.use(express.json({ limit: '1mb' }))
 app.use(
   cors({
     origin(origin, cb) {
-      // allow same-origin / curl (no origin) and the whitelisted dev origins
-      if (!origin || config.allowedOrigins.includes(origin)) return cb(null, true)
-      return cb(null, true) // relaxed for the MVP; tighten before production
+      // No Origin header → non-browser caller (curl, server-to-server, health
+      // checks). These can't be used for browser CSRF, so allow them.
+      if (!origin) return cb(null, true)
+      const clean = origin.replace(/\/$/, '')
+      if (config.allowedOrigins.includes(clean)) return cb(null, true)
+      // Disallowed browser origin → block (no CORS headers sent).
+      return cb(null, false)
     },
   })
 )
@@ -111,7 +114,6 @@ app.get('/api/health', (_req, res) => {
     service: 'passgp-server',
     chatModel: config.chatModel,
     realtimeModel: config.realtimeModel,
-    case: SAMPLE_CASE.external_ref,
   })
 })
 
@@ -570,6 +572,69 @@ app.get('/api/admin/questions', requireAdmin, async (_req, res) => {
   }
 })
 
+// Admin: fetch ONE full case (for the editor)
+app.get('/api/admin/questions/:id', requireAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('exam_questions').select('*').eq('id', req.params.id).maybeSingle()
+    if (error) return res.status(500).json({ error: error.message })
+    if (!data) return res.status(404).json({ error: 'Case not found' })
+    res.json({ question: data })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Whitelist of columns an admin may write (prevents arbitrary column injection).
+const CASE_FIELDS = [
+  'title', 'exam_type', 'pathway', 'candidate_instructions', 'stem', 'patient_script',
+  'marking_criteria', 'model_answer', 'examiner_instructions', 'red_flags', 'feedback_points',
+  'total_marks', 'pass_mark', 'duration_seconds', 'killer_marks', 'status', 'is_active', 'in_training',
+]
+function pickCaseFields(body = {}) {
+  const out = {}
+  for (const k of CASE_FIELDS) if (k in body) out[k] = body[k]
+  return out
+}
+
+// Admin: CREATE a case
+app.post('/api/admin/questions', requireAdmin, async (req, res) => {
+  try {
+    const payload = pickCaseFields(req.body)
+    if (!payload.title || !payload.stem) return res.status(400).json({ error: 'Title and scenario are required' })
+    const { data, error } = await supabase.from('exam_questions').insert(payload).select('*').single()
+    if (error) return res.status(500).json({ error: error.message })
+    res.json({ question: data })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Admin: UPDATE / EDIT a case (also used for activate/deactivate/status via PATCH)
+async function updateCase(req, res) {
+  try {
+    const payload = pickCaseFields(req.body)
+    if (!Object.keys(payload).length) return res.status(400).json({ error: 'Nothing to update' })
+    const { data, error } = await supabase.from('exam_questions').update(payload).eq('id', req.params.id).select('*').single()
+    if (error) return res.status(500).json({ error: error.message })
+    res.json({ question: data })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+}
+app.put('/api/admin/questions/:id', requireAdmin, updateCase)
+app.patch('/api/admin/questions/:id', requireAdmin, updateCase)
+
+// Admin: DELETE a case
+app.delete('/api/admin/questions/:id', requireAdmin, async (req, res) => {
+  try {
+    const { error } = await supabase.from('exam_questions').delete().eq('id', req.params.id)
+    if (error) return res.status(500).json({ error: error.message })
+    res.json({ ok: true })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // Admin: push/remove a batch of cases into/out of the training set (persists via service key)
 app.post('/api/admin/training/set', requireAdmin, async (req, res) => {
   try {
@@ -590,35 +655,29 @@ app.post('/api/admin/training/set', requireAdmin, async (req, res) => {
 })
 
 /* ------------------------------------------------------------------ */
-/*  ADMIN — self-service password reset (no email link)                */
-/*  Step 1: check the email belongs to an admin                        */
-/*  Step 2: set a new password directly (service role)                 */
+/*  ADMIN — password reset                                             */
+/*  SECURITY: self-service reset uses Supabase's email recovery flow   */
+/*  (a one-time link sent to the verified inbox) handled entirely in   */
+/*  the admin client. There is deliberately NO endpoint that sets a    */
+/*  password from just an email — that was an account-takeover risk.   */
+/*                                                                     */
+/*  A superadmin CAN reset another admin's password (requires a valid  */
+/*  admin session AND superadmin role).                                */
 /* ------------------------------------------------------------------ */
-async function findAdminByEmail(email) {
-  if (!supabase || !email) return null
-  const { data } = await supabase.from('admin_users').select('id, email').ilike('email', email.trim()).maybeSingle()
-  return data || null
-}
-
-app.post('/api/admin/auth/check-email', async (req, res) => {
+app.post('/api/admin/auth/admin-reset-password', requireAdmin, async (req, res) => {
   try {
-    const admin = await findAdminByEmail(req.body?.email)
-    res.json({ exists: Boolean(admin) })
-  } catch {
-    res.json({ exists: false })
-  }
-})
+    // Only a superadmin may reset other admins' passwords.
+    const { data: me } = await supabase.from('admin_users').select('role').eq('id', req.adminUser.id).maybeSingle()
+    if (me?.role !== 'superadmin') return res.status(403).json({ error: 'Superadmin role required' })
 
-app.post('/api/admin/auth/reset-password', async (req, res) => {
-  try {
     const { email, password } = req.body || {}
     if (!email || !password) return res.status(400).json({ error: 'Email and password are required' })
-    if (String(password).length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' })
+    if (String(password).length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' })
 
-    const admin = await findAdminByEmail(email)
-    if (!admin) return res.status(404).json({ error: 'No administrator account found for that email' })
+    const { data: target } = await supabase.from('admin_users').select('id').ilike('email', String(email).trim()).maybeSingle()
+    if (!target) return res.status(404).json({ error: 'No administrator account found for that email' })
 
-    const { error } = await supabase.auth.admin.updateUserById(admin.id, { password })
+    const { error } = await supabase.auth.admin.updateUserById(target.id, { password })
     if (error) return res.status(500).json({ error: error.message })
     res.json({ ok: true })
   } catch (e) {

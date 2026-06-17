@@ -15,13 +15,18 @@ export async function apiGet(path) {
   return json
 }
 
-export async function apiPost(path, body) {
+async function send(method, path, body) {
   const res = await fetch(BASE + path, {
-    method: 'POST',
+    method,
     headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
-    body: JSON.stringify(body || {}),
+    body: body === undefined ? undefined : JSON.stringify(body || {}),
   })
   const json = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(json.error || `Request failed (${res.status})`)
   return json
 }
+
+export const apiPost = (path, body) => send('POST', path, body)
+export const apiPut = (path, body) => send('PUT', path, body)
+export const apiPatch = (path, body) => send('PATCH', path, body)
+export const apiDelete = (path) => send('DELETE', path, undefined)

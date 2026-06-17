@@ -46,15 +46,18 @@ export const FEEDBACK_DOMAINS = [
  */
 export function normalizeQuestion(q) {
   if (!q) {
+    // No case available → return a NEUTRAL empty shape (never the hard-coded
+    // sample/chest-pain case). Callers must gate on "no case" and show the
+    // maintenance message rather than running this.
     return {
       id: null,
-      source: 'sample',
-      title: SAMPLE_CASE.title,
-      examType: SAMPLE_CASE.exam_type,
-      scenario: SAMPLE_CASE.stem,
-      vitals: SAMPLE_CASE.vitals,
+      source: 'none',
+      title: 'Clinical case',
+      examType: '',
+      scenario: '',
+      vitals: '',
       questions: [],
-      markingCriteria: SAMPLE_CASE.marking_criteria,
+      markingCriteria: [],
       modelAnswers: [],
       hints: '',
     }
@@ -123,7 +126,7 @@ Information disclosure (as the patient): reveal information ONLY when specifical
 export function buildExaminerInstructions({ examType, candidateName = '', forVoice = false, question, aiConfig = {} } = {}) {
   const c = normalizeQuestion(question)
   const exam = examType || c.examType
-  const criteria = c.markingCriteria.length ? c.markingCriteria : SAMPLE_CASE.marking_criteria
+  const criteria = c.markingCriteria // no sample-case fallback
   const markingKey = [
     ...criteria,
     ...c.modelAnswers.map((a, i) => `Model answer ${i + 1}: ${a}`),

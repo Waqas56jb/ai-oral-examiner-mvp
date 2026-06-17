@@ -3,7 +3,7 @@ import {
   FiPlus, FiEdit2, FiTrash2, FiDownloadCloud, FiHelpCircle, FiCheck, FiX, FiAlertCircle, FiToggleLeft, FiToggleRight,
 } from 'react-icons/fi'
 import { supabase } from '../lib/supabase'
-import { apiGet, apiPost } from '../lib/api'
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from '../lib/api'
 import { Card, Button, IconButton, Badge, Search, EmptyState, PageLoader, Modal } from '../components/ui'
 import QuestionForm, { rowToForm, formToPayload, blankQuestion } from '../components/QuestionForm'
 import { fmtDate, toCsv, downloadFile } from '../lib/format'
@@ -57,8 +57,12 @@ export default function Questions() {
 
   const openNew = () => setEditing({ form: { ...blankQuestion }, id: null })
   const openEdit = async (r) => {
-    const { data } = await supabase.from('exam_questions').select('*').eq('id', r.id).single()
-    setEditing({ id: r.id, form: rowToForm(data || r) })
+    try {
+      const { question } = await apiGet(`/api/admin/questions/${r.id}`)
+      setEditing({ id: r.id, form: rowToForm(question || r) })
+    } catch (e) {
+      setError(e.message)
+    }
   }
 
   const save = async () => {
@@ -70,27 +74,37 @@ export default function Questions() {
     setSaving(true)
     setError('')
     const payload = formToPayload(f)
-    let err
-    if (editing.id) {
-      err = (await supabase.from('exam_questions').update(payload).eq('id', editing.id)).error
-    } else {
-      err = (await supabase.from('exam_questions').insert(payload).select('id').single()).error
+    try {
+      if (editing.id) await apiPut(`/api/admin/questions/${editing.id}`, payload)
+      else await apiPost('/api/admin/questions', payload)
+      setEditing(null)
+      load()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
-    if (err) { setError(err.message); return }
-    setEditing(null)
-    load()
   }
 
   const toggleActive = async (r) => {
-    await supabase.from('exam_questions').update({ is_active: !r.is_active }).eq('id', r.id)
-    setRows((rs) => rs.map((x) => (x.id === r.id ? { ...x, is_active: !x.is_active } : x)))
+    const next = !r.is_active
+    try {
+      await apiPatch(`/api/admin/questions/${r.id}`, { is_active: next, status: next ? 'active' : 'disabled' })
+      setRows((rs) => rs.map((x) => (x.id === r.id ? { ...x, is_active: next } : x)))
+    } catch (e) {
+      setError(e.message)
+    }
   }
 
   const doDelete = async () => {
-    await supabase.from('exam_questions').delete().eq('id', confirmDel.id)
-    setConfirmDel(null)
-    load()
+    try {
+      await apiDelete(`/api/admin/questions/${confirmDel.id}`)
+      setConfirmDel(null)
+      load()
+    } catch (e) {
+      setError(e.message)
+      setConfirmDel(null)
+    }
   }
 
   const exportCsv = () => {

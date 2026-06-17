@@ -23,16 +23,24 @@ export const config = {
   // --- Audio transcription (so user speech appears in the transcript) ---
   transcriptionModel: 'whisper-1',
 
-  // CORS — allow the Vite dev servers and the live deployed apps
+  // CORS — STRICT allow-list. Only these origins may call the API.
+  // Add PassGP production / Kajabi custom domains via the ALLOWED_ORIGINS env var
+  // (comma-separated), e.g. ALLOWED_ORIGINS=https://app.passgp.com,https://passgp.kajabi.com
   allowedOrigins: [
+    // Local dev (Vite)
     'http://localhost:5173',
     'http://127.0.0.1:5173',
-    'http://localhost:4173',
     'http://localhost:5174',
+    'http://localhost:4173',
     // Live deployments (client account)
     'https://ai-oral-examiner-mvp-backend.vercel.app',
     'https://ai-oral-examiner-mvp-admin.vercel.app',
     'https://ai-oral-examiner-mvp-chatbot.vercel.app',
+    // Extra origins from the environment (PassGP / Kajabi domains)
+    ...String(process.env.ALLOWED_ORIGINS || '')
+      .split(',')
+      .map((s) => s.trim().replace(/\/$/, ''))
+      .filter(Boolean),
   ],
 }
 
