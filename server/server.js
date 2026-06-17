@@ -590,7 +590,7 @@ app.get('/api/admin/questions', requireAdmin, async (_req, res) => {
     while (true) {
       const { data, error } = await supabase
         .from('exam_questions')
-        .select('id, title, exam_type, in_training, is_active')
+        .select('id, title, exam_type, pathway, in_training, is_active, status')
         .order('title')
         .range(from, from + 999)
       if (error) return res.status(500).json({ error: error.message })

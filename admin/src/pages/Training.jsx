@@ -10,6 +10,7 @@ import QuestionForm, { rowToForm, formToPayload, blankQuestion } from '../compon
 export default function Training() {
   const [docs, setDocs] = useState(null)
   const [cat, setCat] = useState('All')
+  const [pathway, setPathway] = useState('All exams')
   const [qA, setQA] = useState('')
   const [qT, setQT] = useState('')
   const [sel, setSel] = useState({})
@@ -27,7 +28,7 @@ export default function Training() {
     while (true) {
       const { data, error } = await supabase
         .from('exam_questions')
-        .select('id, title, exam_type, in_training, is_active')
+        .select('id, title, exam_type, pathway, in_training, is_active')
         .order('title')
         .range(from, from + 999)
       if (error) throw error
@@ -59,14 +60,23 @@ export default function Training() {
     return ['All', ...Array.from(s).sort()]
   }, [docs])
 
+  // Exam pathways present in the bank — lets the admin "train specific exams"
+  // (e.g. RACGP CCE vs StAMPS) rather than just clinical categories.
+  const pathways = useMemo(() => {
+    const s = new Set()
+    ;(docs || []).forEach((d) => d.pathway && s.add(d.pathway))
+    return ['All exams', ...Array.from(s).sort()]
+  }, [docs])
+
   const inCat = (d) => cat === 'All' || d.exam_type === cat
+  const inPathway = (d) => pathway === 'All exams' || (d.pathway || '') === pathway
   const available = useMemo(
-    () => (docs || []).filter((d) => !d.in_training && inCat(d) && (!qA.trim() || d.title.toLowerCase().includes(qA.toLowerCase()))),
-    [docs, cat, qA] // eslint-disable-line
+    () => (docs || []).filter((d) => !d.in_training && inCat(d) && inPathway(d) && (!qA.trim() || d.title.toLowerCase().includes(qA.toLowerCase()))),
+    [docs, cat, pathway, qA] // eslint-disable-line
   )
   const training = useMemo(
-    () => (docs || []).filter((d) => d.in_training && inCat(d) && (!qT.trim() || d.title.toLowerCase().includes(qT.toLowerCase()))),
-    [docs, cat, qT] // eslint-disable-line
+    () => (docs || []).filter((d) => d.in_training && inCat(d) && inPathway(d) && (!qT.trim() || d.title.toLowerCase().includes(qT.toLowerCase()))),
+    [docs, cat, pathway, qT] // eslint-disable-line
   )
   const selIds = Object.keys(sel).filter((k) => sel[k])
 
@@ -125,11 +135,22 @@ export default function Training() {
         <div className="page-actions"><Button icon={<FiPlus />} onClick={openAdd}>Add document</Button></div>
       </div>
 
-      <div className="toolbar">
+      <div className="toolbar" style={{ flexWrap: 'wrap', gap: 12 }}>
+        <div className="flex items-center gap">
+          <span className="muted" style={{ fontSize: '0.82rem', fontWeight: 600 }}>Exam:</span>
+          <select className="select" style={{ minWidth: 200 }} value={pathway} onChange={(e) => setPathway(e.target.value)}>
+            {pathways.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
         <div className="flex gap" style={{ flexWrap: 'wrap' }}>
           {cats.map((c) => <button key={c} className={`chip ${cat === c ? 'active' : ''}`} onClick={() => setCat(c)}>{c}</button>)}
         </div>
       </div>
+      {pathway !== 'All exams' && (
+        <p className="muted" style={{ fontSize: '0.82rem', margin: '-6px 0 12px' }}>
+          Showing only <strong>{pathway}</strong> cases. Use “Push all” to train the examiner on this entire exam.
+        </p>
+      )}
 
       {error && <div className="alert alert--error" style={{ marginBottom: 14 }}><FiAlertCircle /> {error}</div>}
 
