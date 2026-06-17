@@ -452,3 +452,10 @@ table.tbl { width: 100%; border-collapse: collapse; }
 /* Cohort benchmarking pass-rate bar */
 .bench-bar { display: inline-block; width: 80px; height: 7px; border-radius: 4px; background: #eef1f6; overflow: hidden; vertical-align: middle; margin-right: 8px; }
 .bench-bar span { display: block; height: 100%; border-radius: 4px; }
+
+/* Case status selector (draft/active/disabled/archived) */
+.status-pick { border: 1px solid var(--line-2); border-radius: 999px; padding: 4px 10px; font-size: 0.78rem; font-weight: 700; cursor: pointer; background: #f1f5f9; color: #64748b; }
+.status-pick--active   { background: #d1fae5; color: #047857; border-color: #a7f3d0; }
+.status-pick--draft    { background: #fef3c7; color: #b45309; border-color: #fde68a; }
+.status-pick--disabled { background: #f1f5f9; color: #64748b; }
+.status-pick--archived { background: #ede9fe; color: #6d28d9; border-color: #ddd6fe; }

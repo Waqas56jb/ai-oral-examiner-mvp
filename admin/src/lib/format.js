@@ -51,6 +51,42 @@ export function toCsv(rows, headers) {
   return head + '\n' + body
 }
 
+/** Parse CSV text into an array of objects keyed by the header row.
+ *  Handles quoted fields, escaped quotes ("") and newlines inside quotes. */
+export function parseCsv(text) {
+  const rows = []
+  let row = []
+  let field = ''
+  let inQuotes = false
+  const s = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i]
+    if (inQuotes) {
+      if (ch === '"') {
+        if (s[i + 1] === '"') { field += '"'; i++ }
+        else inQuotes = false
+      } else field += ch
+    } else if (ch === '"') {
+      inQuotes = true
+    } else if (ch === ',') {
+      row.push(field); field = ''
+    } else if (ch === '\n') {
+      row.push(field); rows.push(row); row = []; field = ''
+    } else {
+      field += ch
+    }
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row) }
+  const nonEmpty = rows.filter((r) => r.some((c) => c.trim() !== ''))
+  if (!nonEmpty.length) return []
+  const headers = nonEmpty[0].map((h) => h.trim())
+  return nonEmpty.slice(1).map((r) => {
+    const obj = {}
+    headers.forEach((h, i) => { obj[h] = (r[i] ?? '').trim() })
+    return obj
+  })
+}
+
 export function downloadFile(name, content, type = 'text/plain') {
   const blob = new Blob([content], { type })
   const url = URL.createObjectURL(blob)

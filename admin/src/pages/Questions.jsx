@@ -1,12 +1,55 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  FiPlus, FiEdit2, FiTrash2, FiDownloadCloud, FiHelpCircle, FiCheck, FiX, FiAlertCircle, FiToggleLeft, FiToggleRight,
+  FiPlus, FiEdit2, FiTrash2, FiDownloadCloud, FiUpload, FiHelpCircle, FiCheck, FiAlertCircle, FiPlay, FiExternalLink,
 } from 'react-icons/fi'
 import { supabase } from '../lib/supabase'
 import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from '../lib/api'
 import { Card, Button, IconButton, Badge, Search, EmptyState, PageLoader, Modal } from '../components/ui'
 import QuestionForm, { rowToForm, formToPayload, blankQuestion } from '../components/QuestionForm'
-import { fmtDate, toCsv, downloadFile } from '../lib/format'
+import { fmtDate, toCsv, parseCsv, downloadFile } from '../lib/format'
+
+// Full case CSV schema (#9). Order = column order in the exported file.
+const CSV_COLS = [
+  'external_ref', 'title', 'exam_type', 'pathway', 'status',
+  'candidate_instructions', 'stem', 'patient_script',
+  'marking_criteria', 'model_answer', 'examiner_instructions',
+  'red_flags', 'killer_marks', 'feedback_points',
+  'total_marks', 'pass_mark', 'duration_seconds',
+]
+// Chatbot app URL (for launching a live test session). Override with VITE_CHATBOT_URL.
+const CHATBOT_URL = (import.meta.env.VITE_CHATBOT_URL || 'https://ai-oral-examiner-mvp-chatbot.vercel.app').replace(/\/$/, '')
+
+// marking_criteria is an array in the DB — represent it in one CSV cell.
+const joinCriteria = (v) => (Array.isArray(v) ? v.join(' | ') : v || '')
+const splitCriteria = (v) => String(v || '').split(/\s*\|\s*|\n/).map((s) => s.trim()).filter(Boolean)
+
+function rowToCsvObj(r) {
+  const o = {}
+  CSV_COLS.forEach((c) => { o[c] = c === 'marking_criteria' ? joinCriteria(r.marking_criteria) : (r[c] ?? '') })
+  return o
+}
+function csvObjToPayload(o) {
+  return {
+    external_ref: o.external_ref?.trim() || null,
+    title: (o.title || '').trim(),
+    exam_type: (o.exam_type || '').trim() || 'General',
+    pathway: o.pathway?.trim() || null,
+    status: ['draft', 'active', 'disabled', 'archived'].includes((o.status || '').trim()) ? o.status.trim() : 'draft',
+    is_active: (o.status || '').trim() === 'active',
+    candidate_instructions: o.candidate_instructions?.trim() || null,
+    stem: (o.stem || '').trim(),
+    patient_script: o.patient_script?.trim() || null,
+    marking_criteria: splitCriteria(o.marking_criteria),
+    model_answer: o.model_answer?.trim() || null,
+    examiner_instructions: o.examiner_instructions?.trim() || null,
+    red_flags: o.red_flags?.trim() || null,
+    killer_marks: o.killer_marks?.trim() || null,
+    feedback_points: o.feedback_points?.trim() || null,
+    total_marks: Number(o.total_marks) > 0 ? Number(o.total_marks) : 10,
+    pass_mark: o.pass_mark !== '' && o.pass_mark != null ? Number(o.pass_mark) : 5,
+    duration_seconds: Number(o.duration_seconds) > 0 ? Number(o.duration_seconds) : 480,
+  }
+}
 
 export default function Questions() {
   const [rows, setRows] = useState([])
@@ -17,7 +60,16 @@ export default function Questions() {
   const [saving, setSaving] = useState(false)
   const [confirmDel, setConfirmDel] = useState(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [csvOpen, setCsvOpen] = useState(false)
+  const [preview, setPreview] = useState(null) // full case object
   const [error, setError] = useState('')
+
+  const openPreview = async (r) => {
+    try {
+      const { question } = await apiGet(`/api/admin/questions/${r.id}`)
+      setPreview(question)
+    } catch (e) { setError(e.message) }
+  }
 
   const load = async () => {
     setLoading(true)
@@ -27,7 +79,7 @@ export default function Questions() {
     while (true) {
       const { data, error } = await supabase
         .from('exam_questions')
-        .select('id, title, exam_type, is_active, external_ref, marking_criteria')
+        .select('id, title, exam_type, is_active, status, external_ref, marking_criteria')
         .order('title')
         .range(from, from + 999)
       if (error || !data) break
@@ -86,11 +138,10 @@ export default function Questions() {
     }
   }
 
-  const toggleActive = async (r) => {
-    const next = !r.is_active
+  const setStatus = async (r, status) => {
     try {
-      await apiPatch(`/api/admin/questions/${r.id}`, { is_active: next, status: next ? 'active' : 'disabled' })
-      setRows((rs) => rs.map((x) => (x.id === r.id ? { ...x, is_active: next } : x)))
+      await apiPatch(`/api/admin/questions/${r.id}`, { status, is_active: status === 'active' })
+      setRows((rs) => rs.map((x) => (x.id === r.id ? { ...x, status, is_active: status === 'active' } : x)))
     } catch (e) {
       setError(e.message)
     }
@@ -107,14 +158,19 @@ export default function Questions() {
     }
   }
 
-  const exportCsv = () => {
-    const csv = toCsv(filtered, [
-      { label: 'Title', key: 'title' },
-      { label: 'Exam', key: 'exam_type' },
-      { label: 'Active', get: (r) => (r.is_active ? 'yes' : 'no') },
-      { label: 'Ref', key: 'external_ref' },
-    ])
-    downloadFile(`passgp-questions-${Date.now()}.csv`, csv, 'text/csv')
+  const [exporting, setExporting] = useState(false)
+  const exportCsv = async () => {
+    setExporting(true)
+    try {
+      const { questions } = await apiGet('/api/admin/questions/export')
+      const headers = CSV_COLS.map((c) => ({ label: c, get: (r) => r[c] }))
+      const csv = toCsv(questions.map(rowToCsvObj), headers)
+      downloadFile(`passgp-cases-${Date.now()}.csv`, csv, 'text/csv')
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setExporting(false)
+    }
   }
 
   if (loading) return <PageLoader />
@@ -128,7 +184,8 @@ export default function Questions() {
         </div>
         <div className="page-actions">
           <Button variant="ghost" icon={<FiDownloadCloud />} onClick={() => setImportOpen(true)}>Import from Jotform</Button>
-          <Button variant="ghost" onClick={exportCsv}>Export CSV</Button>
+          <Button variant="ghost" icon={<FiUpload />} onClick={() => setCsvOpen(true)}>Import CSV</Button>
+          <Button variant="ghost" loading={exporting} onClick={exportCsv}>Export CSV</Button>
           <Button icon={<FiPlus />} onClick={openNew}>Add question</Button>
         </div>
       </div>
@@ -159,12 +216,20 @@ export default function Questions() {
                     <td className="mono">{(r.marking_criteria || []).length}</td>
                     <td className="muted">{r.external_ref ? 'Jotform' : 'Manual'}</td>
                     <td>
-                      <button className="badge" onClick={() => toggleActive(r)} style={{ cursor: 'pointer', background: r.is_active ? '#d1fae5' : '#f1f5f9', color: r.is_active ? '#047857' : '#64748b' }}>
-                        {r.is_active ? <FiToggleRight /> : <FiToggleLeft />} {r.is_active ? 'Active' : 'Disabled'}
-                      </button>
+                      <select
+                        className={`status-pick status-pick--${r.status || (r.is_active ? 'active' : 'disabled')}`}
+                        value={r.status || (r.is_active ? 'active' : 'disabled')}
+                        onChange={(e) => setStatus(r, e.target.value)}
+                      >
+                        <option value="draft">Draft</option>
+                        <option value="active">Active</option>
+                        <option value="disabled">Disabled</option>
+                        <option value="archived">Archived</option>
+                      </select>
                     </td>
                     <td>
                       <div className="flex" style={{ justifyContent: 'flex-end', gap: 4 }}>
+                        <IconButton icon={<FiPlay />} onClick={() => openPreview(r)} title="Preview & test" />
                         <IconButton icon={<FiEdit2 />} onClick={() => openEdit(r)} title="Edit" />
                         <IconButton icon={<FiTrash2 />} danger onClick={() => setConfirmDel(r)} title="Delete" />
                       </div>
@@ -216,7 +281,131 @@ export default function Questions() {
       )}
 
       {importOpen && <ImportModal onClose={() => setImportOpen(false)} onDone={load} />}
+      {csvOpen && <CsvImportModal onClose={() => setCsvOpen(false)} onDone={load} />}
+      {preview && <PreviewModal q={preview} onClose={() => setPreview(null)} />}
     </>
+  )
+}
+
+function PreviewModal({ q, onClose }) {
+  const testUrl = `${CHATBOT_URL}/exam?caseId=${q.id}`
+  const status = q.status || (q.is_active ? 'active' : 'disabled')
+  const Row = ({ label, value }) => value ? (
+    <div style={{ marginBottom: 12 }}>
+      <div className="kv__k" style={{ marginBottom: 4 }}>{label}</div>
+      <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.9rem', lineHeight: 1.55 }}>{value}</div>
+    </div>
+  ) : null
+  return (
+    <Modal
+      wide
+      title="Case preview & test"
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>Close</Button>
+          <Button icon={<FiExternalLink />} onClick={() => window.open(testUrl, '_blank', 'noopener')}>
+            Launch test session
+          </Button>
+        </>
+      }
+    >
+      <div className="flex items-center gap" style={{ marginBottom: 14, flexWrap: 'wrap' }}>
+        <h3 style={{ fontSize: '1.15rem' }}>{q.title}</h3>
+        <Badge color="violet">{q.exam_type}</Badge>
+        {q.pathway && <Badge color="blue">{q.pathway}</Badge>}
+        <span className={`status-pick status-pick--${status}`} style={{ pointerEvents: 'none' }}>{status}</span>
+      </div>
+
+      <div className="alert" style={{ marginBottom: 16, background: '#f8fafc' }}>
+        Marks: <strong>{q.total_marks ?? 10}</strong> · Pass: <strong>{q.pass_mark ?? 5}</strong> · Time: <strong>{Math.round((q.duration_seconds || 480) / 60)} min</strong>
+        {status !== 'active' && <span> · This case is <strong>{status}</strong> — you can still test it here before setting it Active.</span>}
+      </div>
+
+      <Row label="Candidate instructions" value={q.candidate_instructions} />
+      <Row label="Clinical scenario / stem" value={q.stem} />
+      <Row label="Patient script (examiner only)" value={q.patient_script} />
+      <Row label="Marking rubric" value={(q.marking_criteria || []).map((c, i) => `${i + 1}. ${c}`).join('\n')} />
+      <Row label="Model / expected answer" value={q.model_answer} />
+      <Row label="Examiner instructions" value={q.examiner_instructions} />
+      <Row label="Red flags" value={q.red_flags} />
+      <Row label="Killer / unsafe marks (auto-fail)" value={q.killer_marks} />
+    </Modal>
+  )
+}
+
+function CsvImportModal({ onClose, onDone }) {
+  const [parsed, setParsed] = useState(null) // array of payloads
+  const [fileName, setFileName] = useState('')
+  const [err, setErr] = useState('')
+  const [running, setRunning] = useState(false)
+  const [result, setResult] = useState(null)
+
+  const onFile = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setErr(''); setResult(null); setFileName(file.name)
+    try {
+      const text = await file.text()
+      const objs = parseCsv(text)
+      if (!objs.length) { setErr('No rows found in that CSV.'); setParsed(null); return }
+      if (!('title' in objs[0]) || !('stem' in objs[0])) {
+        setErr('CSV must include at least "title" and "stem" columns. Tip: export first to get the exact format.')
+        setParsed(null); return
+      }
+      setParsed(objs.map(csvObjToPayload).filter((p) => p.title && p.stem))
+    } catch (e2) {
+      setErr('Could not read that file: ' + e2.message)
+    }
+  }
+
+  const run = async () => {
+    setRunning(true); setErr('')
+    try {
+      // Send in batches to stay under serverless limits.
+      let inserted = 0, updated = 0, failed = 0
+      for (let i = 0; i < parsed.length; i += 50) {
+        const d = await apiPost('/api/admin/questions/bulk', { rows: parsed.slice(i, i + 50) })
+        inserted += d.inserted || 0; updated += d.updated || 0; failed += d.failed || 0
+      }
+      setResult({ inserted, updated, failed, total: parsed.length })
+      onDone()
+    } catch (e) {
+      setErr(e.message)
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  return (
+    <Modal
+      title="Import cases from CSV"
+      onClose={running ? () => {} : onClose}
+      footer={result ? <Button onClick={onClose}>Done</Button> : (
+        <>
+          <Button variant="ghost" disabled={running} onClick={onClose}>Cancel</Button>
+          <Button loading={running} disabled={!parsed?.length} onClick={run} icon={<FiUpload />}>
+            Import {parsed?.length || 0} case{parsed?.length === 1 ? '' : 's'}
+          </Button>
+        </>
+      )}
+    >
+      {err && <div className="alert alert--error"><FiAlertCircle /> {err}</div>}
+      {result ? (
+        <div className="alert alert--success">
+          <FiCheck />
+          <div>Inserted <strong>{result.inserted}</strong>, updated <strong>{result.updated}</strong>{result.failed ? `, ${result.failed} skipped` : ''} of {result.total}.</div>
+        </div>
+      ) : (
+        <>
+          <p className="muted" style={{ marginBottom: 12 }}>
+            Upload a CSV with columns: <code>{CSV_COLS.join(', ')}</code>. Rows are matched by <code>external_ref</code> (or title) and updated, or inserted when new. Multiple rubric items go in one cell separated by <code> | </code>. Export first to get the exact template.
+          </p>
+          <input type="file" accept=".csv,text/csv" onChange={onFile} />
+          {fileName && parsed && <p className="muted" style={{ marginTop: 10 }}>{fileName} — <strong>{parsed.length}</strong> valid case{parsed.length === 1 ? '' : 's'} ready to import.</p>}
+        </>
+      )}
+    </Modal>
   )
 }
 

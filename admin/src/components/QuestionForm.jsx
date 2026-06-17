@@ -29,8 +29,15 @@ export const blankQuestion = {
   total_marks: 10,
   pass_mark: 5,
   duration_minutes: 8,
-  is_active: true,
+  status: 'draft',
 }
+
+export const STATUSES = [
+  { value: 'draft', label: 'Draft', color: 'amber' },
+  { value: 'active', label: 'Active', color: 'green' },
+  { value: 'disabled', label: 'Disabled', color: 'slate' },
+  { value: 'archived', label: 'Archived', color: 'slate' },
+]
 
 /** Map a DB row into the editable form shape. */
 export function rowToForm(d = {}) {
@@ -50,7 +57,7 @@ export function rowToForm(d = {}) {
     total_marks: d.total_marks ?? 10,
     pass_mark: d.pass_mark ?? 5,
     duration_minutes: d.duration_seconds ? Math.round(d.duration_seconds / 60) : 8,
-    is_active: d.is_active ?? true,
+    status: d.status || (d.is_active === false ? 'disabled' : 'active'),
   }
 }
 
@@ -72,7 +79,9 @@ export function formToPayload(f) {
     total_marks: Math.max(1, Number(f.total_marks) || 10),
     pass_mark: Math.max(0, Number(f.pass_mark) || 0),
     duration_seconds: Math.max(60, (Number(f.duration_minutes) || 8) * 60),
-    is_active: f.is_active,
+    status: f.status || 'draft',
+    // keep is_active in sync for backward compatibility (only 'active' is live)
+    is_active: f.status === 'active',
   }
 }
 
@@ -146,9 +155,14 @@ export default function QuestionForm({ form, set, categories = [] }) {
         <AutoTextarea value={form.feedback_points} onChange={f('feedback_points')} maxHeight={180} placeholder="Key teaching points for feedback…" />
       </Field>
 
-      <label className="auth-check">
-        <input type="checkbox" checked={form.is_active} onChange={(e) => set('is_active', e.target.checked)} /> Active (available to candidates)
-      </label>
+      <Field label="Status">
+        <select className="select" value={form.status} onChange={f('status')}>
+          {STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+        </select>
+        <p className="muted" style={{ fontSize: '0.8rem', marginTop: 6 }}>
+          Only <strong>Active</strong> cases are available to candidates. Draft = work in progress, Disabled = temporarily off, Archived = retired.
+        </p>
+      </Field>
     </>
   )
 }

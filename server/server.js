@@ -598,6 +598,68 @@ app.get('/api/admin/questions', requireAdmin, async (_req, res) => {
   }
 })
 
+// Admin: export ALL cases with full fields (for CSV export, #9)
+app.get('/api/admin/questions/export', requireAdmin, async (_req, res) => {
+  try {
+    let all = []
+    let from = 0
+    while (true) {
+      const { data, error } = await supabase
+        .from('exam_questions')
+        .select('id, external_ref, title, exam_type, pathway, status, is_active, in_training, candidate_instructions, stem, patient_script, marking_criteria, model_answer, examiner_instructions, red_flags, killer_marks, feedback_points, total_marks, pass_mark, duration_seconds')
+        .order('title')
+        .range(from, from + 999)
+      if (error) return res.status(500).json({ error: error.message })
+      all = all.concat(data || [])
+      if (!data || data.length < 1000) break
+      from += 1000
+    }
+    res.json({ questions: all, total: all.length })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Admin: BULK upsert cases from a CSV import (#9).
+// Body: { rows: [{ ...case fields, external_ref? }] }. Matches on external_ref
+// when present, otherwise on exact title; inserts when no match.
+app.post('/api/admin/questions/bulk', requireAdmin, async (req, res) => {
+  try {
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : []
+    if (!rows.length) return res.json({ inserted: 0, updated: 0, failed: 0 })
+    let inserted = 0, updated = 0, failed = 0
+    for (const raw of rows) {
+      try {
+        const payload = pickCaseFields(raw)
+        if (!payload.title || !payload.stem) { failed++; continue }
+        let existing = null
+        if (raw.external_ref) {
+          existing = (await supabase.from('exam_questions').select('id').eq('external_ref', raw.external_ref).maybeSingle()).data
+        }
+        if (!existing) {
+          existing = (await supabase.from('exam_questions').select('id').eq('title', payload.title).maybeSingle()).data
+        }
+        if (existing?.id) {
+          const { error } = await supabase.from('exam_questions').update(payload).eq('id', existing.id)
+          if (error) { failed++; continue }
+          updated++
+        } else {
+          const ins = { ...payload }
+          if (raw.external_ref) ins.external_ref = raw.external_ref
+          const { error } = await supabase.from('exam_questions').insert(ins)
+          if (error) { failed++; continue }
+          inserted++
+        }
+      } catch {
+        failed++
+      }
+    }
+    res.json({ inserted, updated, failed, total: rows.length })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // Admin: fetch ONE full case (for the editor)
 app.get('/api/admin/questions/:id', requireAdmin, async (req, res) => {
   try {
