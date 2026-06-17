@@ -88,6 +88,11 @@ export function normalizeQuestion(q) {
     examinerInstructions: q.examiner_instructions || '',
     redFlags: q.red_flags || '',
     feedbackPoints: q.feedback_points || '',
+    // marking controls (#6)
+    totalMarks: Number(q.total_marks) > 0 ? Number(q.total_marks) : 10,
+    passMark: q.pass_mark != null ? Number(q.pass_mark) : null,
+    killerMarks: q.killer_marks || '',
+    durationSeconds: Number(q.duration_seconds) > 0 ? Number(q.duration_seconds) : 480,
   }
 }
 
@@ -280,6 +285,74 @@ ${adminDirectives ? `\n# ADMIN DIRECTIVES — set by PassGP. These take PRIORITY
 - Use brief acknowledgements ("Mm-hm", "Okay", "Go on"). No markdown or symbols.
 - Begin now by greeting and telling them the available areas.`
   return system + voiceNote
+}
+
+/**
+ * Marks-aware grading prompt (#6). Grades the candidate against the case's OWN
+ * marking scheme: rubric, model answer, red flags, killer/unsafe marks, and the
+ * configured total/pass marks. Returns a JSON object the server post-processes.
+ * @param {Array} transcript
+ * @param {object} c  normalized case (from normalizeQuestion)
+ */
+export function buildMarksFeedbackPrompt(transcript = [], c = {}) {
+  const convo = (Array.isArray(transcript) ? transcript : [])
+    .map((t) => `${t.role === 'examiner' ? 'EXAMINER' : 'CANDIDATE'}: ${t.text}`)
+    .join('\n')
+  const total = Number(c.totalMarks) > 0 ? Number(c.totalMarks) : 10
+  const pass = c.passMark != null ? Number(c.passMark) : Math.ceil(total / 2)
+  const rubric = (c.markingCriteria || []).length
+    ? c.markingCriteria.map((r, i) => `  ${i + 1}. ${r}`).join('\n')
+    : '  (no explicit rubric — judge against the model answer and good clinical practice)'
+  const model = (c.modelAnswers || []).join('\n') || c.modelAnswer || '(none provided)'
+
+  return `You are a senior medical examiner marking a postgraduate oral exam station STRICTLY against its marking scheme. Mark ONLY what the candidate actually said in the transcript.
+
+CASE: ${c.title || 'Clinical case'} (${c.examType || 'General'})
+
+MARKING RUBRIC (award marks across these — they define what "good" looks like):
+${rubric}
+
+MODEL / EXPECTED ANSWER (reference for full marks):
+${model}
+
+RED FLAGS the candidate must identify: ${c.redFlags || '(none specified)'}
+KILLER / UNSAFE MARKS (if the candidate does or misses any of these it is a critical safety failure → automatic FAIL): ${c.killerMarks || '(none specified)'}
+
+SCORING:
+- Total marks available: ${total}
+- Pass mark: ${pass}
+- Award "marks_awarded" between 0 and ${total} based on how much of the rubric/model answer the candidate covered.
+- Set "killer_failed" true ONLY if the candidate triggered a killer/unsafe mark above (or missed a critical safety step). If true, the station is an automatic fail regardless of marks.
+
+Return ONLY a JSON object with EXACTLY these keys:
+{
+  "candidate_name": "",
+  "marks_awarded": 0,
+  "total_marks": ${total},
+  "pass_mark": ${pass},
+  "killer_failed": false,
+  "rubric_breakdown": [{ "item": "", "awarded": 0, "max": 0, "met": false }],
+  "clinical_reasoning": 0,
+  "diagnosis": 0,
+  "management": 0,
+  "communication": 0,
+  "strengths": [],
+  "weaknesses": [],
+  "missed_items": [],
+  "unsafe_areas": [],
+  "recommendations": [],
+  "examiner_comments": ""
+}
+
+- clinical_reasoning/diagnosis/management/communication are each 0-10.
+- "rubric_breakdown": one entry per rubric line, with marks awarded vs max for that line.
+- "missed_items": rubric/model points the candidate did NOT cover.
+- "unsafe_areas": anything unsafe (empty if none).
+- "strengths"/"weaknesses"/"recommendations": 3-5 short, specific strings tied to actual answers.
+- "examiner_comments": professional 120-220 word narrative.
+
+TRANSCRIPT:
+${convo || '(no transcript captured — the candidate did not engage)'}`
 }
 
 // Generic grader system prompt used for feedback when no single case is known

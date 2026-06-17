@@ -185,6 +185,9 @@ export async function saveSession(session) {
         improvements: feedback.improvements ?? [],
         missed_items: feedback.missed_items ?? [],
         unsafe_areas: feedback.unsafe_areas ?? [],
+        marks_awarded: feedback.marks_awarded ?? null,
+        total_marks: feedback.total_marks ?? null,
+        killer_failed: feedback.killer_failed ?? false,
       })
       .select('id')
       .single()

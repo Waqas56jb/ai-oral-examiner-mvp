@@ -55,6 +55,9 @@ export default function Report() {
   const missedItems = fb.missed_items || []
   const unsafeAreas = fb.unsafe_areas || []
   const passFail = fb.pass_fail || ''
+  const marksAwarded = fb.marks_awarded
+  const totalMarks = fb.total_marks
+  const killerFailed = fb.killer_failed
   const timeStr = fmtTime(durationSec)
   const rl = result.toLowerCase()
   const resultClass = rl.includes('excellent') || rl.includes('competent') ? 'pass' : rl.includes('needs') || rl.includes('below') ? 'fail' : 'merit'
@@ -137,10 +140,18 @@ export default function Report() {
           </div>
         </div>
 
+        {killerFailed && (
+          <div className="rp-killer">⚠ Critical safety failure — this station is an automatic fail regardless of marks.</div>
+        )}
+
         {/* Stat strip */}
         <div className="rp-stats">
           <Stat icon="⏱" label="Duration" value={timeStr} />
-          <Stat icon="❓" label="Questions" value={questionsAnswered} />
+          {marksAwarded != null && totalMarks ? (
+            <Stat icon="✓" label="Marks" value={`${marksAwarded}/${totalMarks}`} />
+          ) : (
+            <Stat icon="❓" label="Questions" value={questionsAnswered} />
+          )}
           <Stat icon="💬" label="Words spoken" value={wordCount} />
           <Stat icon="🎯" label="Overall" value={`${overall}/10`} />
         </div>

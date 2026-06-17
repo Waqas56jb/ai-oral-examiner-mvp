@@ -44,12 +44,13 @@ function readParams() {
     const mock = mockRaw != null ? Math.max(1, Math.min(parseInt(mockRaw, 10) || 3, 10)) : 0
     return {
       formId: p.get('formId') || p.get('form') || null,
-      exam: p.get('exam') || EXAM_TYPE,
+      caseId: p.get('caseId') || p.get('questionId') || null, // a specific saved case
+      exam: p.get('exam') || p.get('category') || EXAM_TYPE,  // category filter
       mock,
       pathway: p.get('pathway') || '',
     }
   } catch {
-    return { formId: null, exam: EXAM_TYPE, mock: 0, pathway: '' }
+    return { formId: null, caseId: null, exam: EXAM_TYPE, mock: 0, pathway: '' }
   }
 }
 
@@ -158,7 +159,7 @@ export default function VoiceAgent() {
         candidateName: regRef.current.name,
         examType: station ? station.examType : params.exam,
         formId: params.formId,
-        questionId: station ? station.questionId : null,
+        questionId: station ? station.questionId : params.caseId,
         handlers: {
           onState: (s) => setExamState(s),
           onLatency: (ms) => setLatency(ms + 'ms'),
@@ -345,6 +346,7 @@ export default function VoiceAgent() {
       try {
         const qs = new URLSearchParams({ count: String(params.mock) })
         if (reg.pathway) qs.set('pathway', reg.pathway)
+        if (params.exam) qs.set('exam', params.exam)
         const res = await fetch(apiUrl(`/api/mock/circuit?${qs.toString()}`))
         const data = await res.json()
         circuitRef.current = data?.stations || []

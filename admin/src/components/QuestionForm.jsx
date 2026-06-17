@@ -24,6 +24,7 @@ export const blankQuestion = {
   model_answer: '',
   examiner_instructions: '',
   red_flags: '',
+  killer_marks: '',
   feedback_points: '',
   total_marks: 10,
   pass_mark: 5,
@@ -44,6 +45,7 @@ export function rowToForm(d = {}) {
     model_answer: d.model_answer || '',
     examiner_instructions: d.examiner_instructions || '',
     red_flags: d.red_flags || '',
+    killer_marks: d.killer_marks || '',
     feedback_points: d.feedback_points || '',
     total_marks: d.total_marks ?? 10,
     pass_mark: d.pass_mark ?? 5,
@@ -65,6 +67,7 @@ export function formToPayload(f) {
     model_answer: f.model_answer || null,
     examiner_instructions: f.examiner_instructions.trim() || null,
     red_flags: f.red_flags.trim() || null,
+    killer_marks: f.killer_marks.trim() || null,
     feedback_points: f.feedback_points.trim() || null,
     total_marks: Math.max(1, Number(f.total_marks) || 10),
     pass_mark: Math.max(0, Number(f.pass_mark) || 0),
@@ -134,10 +137,14 @@ export default function QuestionForm({ form, set, categories = [] }) {
         <Field label="Red flags (must be identified)">
           <AutoTextarea value={form.red_flags} onChange={f('red_flags')} maxHeight={180} placeholder="Chest pain + sweating, weight loss…" />
         </Field>
-        <Field label="Feedback points">
-          <AutoTextarea value={form.feedback_points} onChange={f('feedback_points')} maxHeight={180} placeholder="Key teaching points for feedback…" />
+        <Field label="Killer / unsafe marks (auto-fail if missed or violated)">
+          <AutoTextarea value={form.killer_marks} onChange={f('killer_marks')} maxHeight={180} placeholder="e.g. Fails to give adrenaline in anaphylaxis · Misses sepsis · Unsafe prescribing" />
         </Field>
       </div>
+
+      <Field label="Feedback points">
+        <AutoTextarea value={form.feedback_points} onChange={f('feedback_points')} maxHeight={180} placeholder="Key teaching points for feedback…" />
+      </Field>
 
       <label className="auth-check">
         <input type="checkbox" checked={form.is_active} onChange={(e) => set('is_active', e.target.checked)} /> Active (available to candidates)

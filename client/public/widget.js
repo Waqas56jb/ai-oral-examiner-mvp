@@ -7,20 +7,35 @@
   const FONT_URL    = 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&display=swap';
 
   /* ── Which clinical case? ──────────────
-     Set per Kajabi lesson via the embed, e.g.:
-       <script src=".../widget.js" data-form-id="251572174898975"></script>
-     or  window.PASSGP_FORM_ID = '251572174898975';  before the script.
+     Set per Kajabi lesson via the embed. Any of these may be combined:
+       <script src=".../widget.js" data-form-id="251572174898975"></script>   (live Jotform case)
+       <script src=".../widget.js" data-case-id="123"></script>                (specific saved case)
+       <script src=".../widget.js" data-category="Cardiology"></script>        (random case in a category)
+       <script src=".../widget.js" data-pathway="RACGP CCE"></script>          (exam pathway)
+       <script src=".../widget.js" data-mock="3"></script>                     (3-station mock circuit)
+     Or set window.PASSGP_FORM_ID / PASSGP_CASE_ID / PASSGP_CATEGORY /
+     PASSGP_PATHWAY / PASSGP_MOCK before the script.
   */
   const SCRIPT_EL =
     document.currentScript ||
     Array.prototype.slice.call(document.querySelectorAll('script')).filter(function (s) {
       return s.src && s.src.indexOf('widget.js') !== -1;
     }).pop();
-  const FORM_ID =
-    (SCRIPT_EL && SCRIPT_EL.getAttribute('data-form-id')) || window.PASSGP_FORM_ID || '';
-  const EXAM_URL = FORM_ID
-    ? WIDGET_URL + '/exam?formId=' + encodeURIComponent(FORM_ID)
-    : WIDGET_URL;
+  function opt(attr, win) {
+    return (SCRIPT_EL && SCRIPT_EL.getAttribute(attr)) || window[win] || '';
+  }
+  const FORM_ID  = opt('data-form-id', 'PASSGP_FORM_ID');
+  const CASE_ID  = opt('data-case-id', 'PASSGP_CASE_ID');
+  const CATEGORY = opt('data-category', 'PASSGP_CATEGORY');
+  const PATHWAY  = opt('data-pathway', 'PASSGP_PATHWAY');
+  const MOCK     = opt('data-mock', 'PASSGP_MOCK');
+  var _params = [];
+  if (FORM_ID)  _params.push('formId=' + encodeURIComponent(FORM_ID));
+  if (CASE_ID)  _params.push('caseId=' + encodeURIComponent(CASE_ID));
+  if (CATEGORY) _params.push('category=' + encodeURIComponent(CATEGORY));
+  if (PATHWAY)  _params.push('pathway=' + encodeURIComponent(PATHWAY));
+  if (MOCK)     _params.push('mock=' + encodeURIComponent(MOCK));
+  const EXAM_URL = _params.length ? WIDGET_URL + '/exam?' + _params.join('&') : WIDGET_URL;
 
   /* ── Inject Google Font ─────────────── */
   if (!document.querySelector('[data-pgp-font]')) {

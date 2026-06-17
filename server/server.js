@@ -9,6 +9,7 @@ import {
   buildPoolInstructions,
   buildGraderSystem,
   buildFeedbackUserPrompt,
+  buildMarksFeedbackPrompt,
   normalizeQuestion,
 } from './prompts/examiner.js'
 import { getRandomQuestion, getQuestionById, getTrainingPool, getCircuit, saveSession } from './db/repo.js'
@@ -321,18 +322,16 @@ app.post('/api/feedback', async (req, res) => {
     const rawCase = questionId || formId ? await resolveCase({ formId, questionId, examType }) : null
     const question = normalizeQuestion(rawCase)
 
-    // Single-case sessions grade against the case; adaptive sessions grade from the transcript.
-    const systemPrompt = rawCase
-      ? buildExaminerInstructions({ examType, forVoice: false, question: rawCase })
-      : buildGraderSystem()
-    const userPrompt = buildFeedbackUserPrompt(transcript)
+    // Single-case sessions grade against the case's OWN marking scheme (#6);
+    // adaptive sessions (no specific case) grade qualitatively from the transcript.
+    const userPrompt = rawCase ? buildMarksFeedbackPrompt(transcript, question) : buildFeedbackUserPrompt(transcript)
 
     const completion = await chatCreate({
       model: await activeChatModel(),
       temperature: 0.4,
       response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: systemPrompt },
+        { role: 'system', content: buildGraderSystem() },
         { role: 'user', content: userPrompt },
       ],
     })
@@ -344,7 +343,7 @@ app.post('/api/feedback', async (req, res) => {
       data = {}
     }
 
-    const report = buildReport(data)
+    const report = buildReport(data, rawCase ? question : null)
 
     // Persist (best-effort; never blocks the response on a DB error)
     let sessionId = null
@@ -370,6 +369,9 @@ app.post('/api/feedback', async (req, res) => {
           improvements: report.weaknesses,
           missed_items: report.missed_items,
           unsafe_areas: report.unsafe_areas,
+          marks_awarded: report.marks_awarded,
+          total_marks: report.total_marks,
+          killer_failed: report.killer_failed,
         },
         transcript,
       })
@@ -393,15 +395,33 @@ app.post('/api/feedback', async (req, res) => {
   }
 })
 
-/* Build the scored report from the model's JSON (scores are 0-10). */
-function buildReport(data) {
+/* Build the scored report from the model's JSON.
+ * If `caseObj` is given, use its marking scheme (total/pass marks, killer marks);
+ * otherwise fall back to qualitative 0-10 domain scoring. */
+function buildReport(data, caseObj = null) {
   const s = (v, fb = 6) => clampInt(v, 0, 10, fb)
   const dr = s(data.clinical_reasoning)
   const dx = s(data.diagnosis)
   const mg = s(data.management)
   const co = s(data.communication)
-  const overall = s(data.overall_score, Math.round((dr + dx + mg + co) / 4))
-  const result = band10(overall)
+
+  // ---- Marks-based result (#6) ----
+  let overall, scorePct, passFail, marksAwarded = null, totalMarks = null, passMark = null, killerFailed = false
+  if (caseObj) {
+    totalMarks = Number(data.total_marks) > 0 ? Number(data.total_marks) : (Number(caseObj.totalMarks) || 10)
+    passMark = data.pass_mark != null ? Number(data.pass_mark)
+      : (caseObj.passMark != null ? Number(caseObj.passMark) : Math.ceil(totalMarks / 2))
+    marksAwarded = clampInt(data.marks_awarded, 0, totalMarks, 0)
+    killerFailed = Boolean(data.killer_failed)
+    scorePct = totalMarks > 0 ? Math.round((marksAwarded / totalMarks) * 100) : 0
+    overall = Math.round(scorePct / 10)
+    passFail = killerFailed ? 'Fail' : (marksAwarded >= passMark ? 'Pass' : 'Fail')
+  } else {
+    overall = s(data.overall_score, Math.round((dr + dx + mg + co) / 4))
+    scorePct = overall * 10
+    passFail = /fail/i.test(String(data.pass_fail)) ? 'Fail' : overall >= 5 ? 'Pass' : 'Fail'
+  }
+  const result = killerFailed ? 'Unsafe — Critical Fail' : band10(overall)
 
   return {
     // ---- exact production JSON schema (0-10) ----
@@ -411,15 +431,21 @@ function buildReport(data) {
     diagnosis: dx,
     management: mg,
     communication: co,
-    pass_fail: /fail/i.test(String(data.pass_fail)) ? 'Fail' : overall >= 5 ? 'Pass' : 'Fail',
+    pass_fail: passFail,
     strengths: arr(data.strengths),
     weaknesses: arr(data.weaknesses),
     missed_items: arr(data.missed_items),
     unsafe_areas: arr(data.unsafe_areas),
     recommendations: arr(data.recommendations),
     examiner_comments: str(data.examiner_comments),
+    // ---- marking detail (#6) ----
+    marks_awarded: marksAwarded,
+    total_marks: totalMarks,
+    pass_mark: passMark,
+    killer_failed: killerFailed,
+    rubric_breakdown: Array.isArray(data.rubric_breakdown) ? data.rubric_breakdown : [],
     // ---- derived fields for charts / report / DB (0-100) ----
-    score: overall * 10,
+    score: scorePct,
     result,
     detailedFeedback: str(data.examiner_comments),
     improvements: arr(data.weaknesses),
