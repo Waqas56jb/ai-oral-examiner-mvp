@@ -75,8 +75,19 @@ export default function VoiceAgent() {
 
   // Candidate registration (#2): captured before the exam so reports are never "Unnamed".
   const [registered, setRegistered] = useState(false)
-  const [reg, setReg] = useState({ name: '', email: '', pathway: params.exam || '' })
+  const [reg, setReg] = useState({ name: '', email: '', exam: params.exam || '' })
   const regRef = useRef(reg)
+
+  // Available exams (RACGP CCE, StAMPS…) for the candidate to choose from.
+  const [exams, setExams] = useState([])
+  useEffect(() => {
+    let active = true
+    fetch(apiUrl('/api/exam-profiles'))
+      .then((r) => r.json())
+      .then((d) => { if (active && Array.isArray(d?.exams)) setExams(d.exams) })
+      .catch(() => {})
+    return () => { active = false }
+  }, [])
 
   // Countdown timer (#6)
   const [remaining, setRemaining] = useState(null) // seconds left, null until started
@@ -157,7 +168,7 @@ export default function VoiceAgent() {
     try {
       const session = await startRealtimeExam({
         candidateName: regRef.current.name,
-        examType: station ? station.examType : params.exam,
+        examType: station ? station.examType : (params.exam || regRef.current.exam),
         formId: params.formId,
         questionId: station ? station.questionId : params.caseId,
         handlers: {
@@ -242,7 +253,7 @@ export default function VoiceAgent() {
           durationSec: sessionSecRef.current,
           candidateName: regRef.current.name,
           candidateEmail: regRef.current.email,
-          pathway: regRef.current.pathway,
+          pathway: regRef.current.exam,
         }),
       })
       if (res.ok) feedback = await res.json()
@@ -275,7 +286,7 @@ export default function VoiceAgent() {
     const base = {
       candidateName:  regRef.current.name,
       candidateEmail: regRef.current.email,
-      pathway:        regRef.current.pathway,
+      pathway:        regRef.current.exam,
       date:           new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' }),
     }
 
@@ -288,7 +299,7 @@ export default function VoiceAgent() {
         isMock: true,
         stations,
         questionTitle: `Mock exam circuit · ${stations.length} stations`,
-        examType: regRef.current.pathway || 'Mock exam',
+        examType: regRef.current.exam || 'Mock exam',
         durationSec: stations.reduce((a, s) => a + s.durationSec, 0),
         questionsAnswered: stations.reduce((a, s) => a + (s.transcript?.filter((t) => t.role === 'examiner').length || 0), 0),
         wordCount: stations.reduce((a, s) => a + (s.transcript?.reduce((n, t) => n + String(t.text || '').split(/\s+/).filter(Boolean).length, 0) || 0), 0),
@@ -345,8 +356,8 @@ export default function VoiceAgent() {
       setLoadingCircuit(true)
       try {
         const qs = new URLSearchParams({ count: String(params.mock) })
-        if (reg.pathway) qs.set('pathway', reg.pathway)
-        if (params.exam) qs.set('exam', params.exam)
+        if (reg.exam) qs.set('exam', reg.exam)
+        else if (params.exam) qs.set('exam', params.exam)
         const res = await fetch(apiUrl(`/api/mock/circuit?${qs.toString()}`))
         const data = await res.json()
         circuitRef.current = data?.stations || []
@@ -385,14 +396,17 @@ export default function VoiceAgent() {
             <input className="va-reg-input" type="email" value={reg.email} placeholder="you@example.com"
               onChange={(e) => setReg((r) => ({ ...r, email: e.target.value }))} />
 
-            <label className="va-reg-label">Exam pathway</label>
-            <select className="va-reg-input" value={reg.pathway}
-              onChange={(e) => setReg((r) => ({ ...r, pathway: e.target.value }))}>
-              <option value="">Select a pathway…</option>
-              {PATHWAYS.map((p) => <option key={p} value={p}>{p}</option>)}
+            <label className="va-reg-label">Exam type{!params.formId && !params.caseId ? <span style={{ color: '#ef4444' }}> *</span> : ''}</label>
+            <select className="va-reg-input" value={reg.exam}
+              onChange={(e) => setReg((r) => ({ ...r, exam: e.target.value }))}>
+              <option value="">{exams.length ? 'Select your exam…' : 'Loading exams…'}</option>
+              {exams.map((ex) => <option key={ex.exam_key} value={ex.exam_key}>{ex.label}{ex.caseCount ? ` (${ex.caseCount} case${ex.caseCount === 1 ? '' : 's'})` : ''}</option>)}
             </select>
+            {!params.formId && !params.caseId && exams.length > 0 && (
+              <p style={{ fontSize: '0.74rem', color: '#9aa3c0', margin: '-6px 0 14px' }}>The examiner will ask which case number you'd like — say a number, or "any" for random.</p>
+            )}
 
-            <button className="va-reg-btn" type="submit" disabled={!reg.name.trim() || loadingCircuit}>
+            <button className="va-reg-btn" type="submit" disabled={!reg.name.trim() || (!params.formId && !params.caseId && exams.length > 0 && !reg.exam) || loadingCircuit}>
               {loadingCircuit ? 'Preparing circuit…' : isMock ? 'Start mock exam →' : 'Start exam →'}
             </button>
           </form>

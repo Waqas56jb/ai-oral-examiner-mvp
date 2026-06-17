@@ -8,6 +8,7 @@ import {
   FiCpu,
   FiSettings,
   FiZap,
+  FiUserCheck,
 } from 'react-icons/fi'
 
 export const navGroups = [
@@ -32,6 +33,7 @@ export const navGroups = [
   {
     label: 'System',
     items: [
+      { to: '/exam-profiles', label: 'Exam Profiles', icon: FiUserCheck },
       { to: '/ai-config', label: 'AI Configuration', icon: FiCpu },
       { to: '/settings', label: 'Settings', icon: FiSettings },
     ],
@@ -46,6 +48,7 @@ export const pageMeta = {
   '/sessions': { title: 'Exam Sessions', sub: 'Completed & live AI sessions' },
   '/transcripts': { title: 'Transcripts', sub: 'Session conversation records' },
   '/analytics': { title: 'Analytics', sub: 'Trends & performance metrics' },
+  '/exam-profiles': { title: 'Exam Profiles', sub: 'Per-exam examiner personalities (CCE, StAMPS…)' },
   '/ai-config': { title: 'AI Configuration', sub: 'Examiner prompt & voice settings' },
   '/settings': { title: 'Settings', sub: 'Integrations & platform controls' },
 }

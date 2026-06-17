@@ -119,6 +119,60 @@ export async function getCircuit({ count = 3, pathway = '', examType = '' } = {}
   }
 }
 
+/* ---- Exam profiles (per-exam examiner personality) ---- */
+
+// An "exam" is identified by a case's pathway, or its exam_type when no pathway.
+const examKeyOf = (q) => (q.pathway && q.pathway.trim()) || (q.exam_type && q.exam_type.trim()) || ''
+
+// Exams a candidate can choose: distinct exam identifiers among trained cases,
+// joined with their (optional) profile. Only enabled exams with ≥1 case.
+export async function getCandidateExams() {
+  if (!supabase) return []
+  const { data } = await supabase
+    .from('exam_questions')
+    .select('exam_type, pathway')
+    .eq('is_active', true)
+    .eq('in_training', true)
+    .limit(5000)
+  const counts = new Map()
+  for (const r of data || []) {
+    const k = examKeyOf(r)
+    if (k) counts.set(k, (counts.get(k) || 0) + 1)
+  }
+  const { data: profs } = await supabase.from('exam_profiles').select('exam_key, label, enabled')
+  const pmap = new Map((profs || []).map((p) => [p.exam_key, p]))
+  return [...counts.entries()]
+    .map(([key, count]) => ({ exam_key: key, label: pmap.get(key)?.label || key, caseCount: count, enabled: pmap.get(key)?.enabled ?? true }))
+    .filter((e) => e.enabled)
+    .sort((a, b) => a.label.localeCompare(b.label))
+}
+
+export async function getExamProfile(examKey) {
+  if (!supabase || !examKey) return null
+  const { data } = await supabase.from('exam_profiles').select('*').eq('exam_key', examKey).maybeSingle()
+  return data || null
+}
+
+// All trained cases for an exam (matched by pathway OR exam_type), numbered.
+export async function getExamCases(examKey, max = 30) {
+  if (!supabase || !examKey) return []
+  const sel = 'id, title, exam_type, pathway, stem, marking_criteria, patient_script, model_answer, red_flags, killer_marks, total_marks, pass_mark, duration_seconds'
+  const base = () => supabase.from('exam_questions').select(sel).eq('is_active', true).eq('in_training', true)
+  const [byPath, byType] = await Promise.all([
+    base().eq('pathway', examKey).limit(max),
+    base().eq('exam_type', examKey).limit(max),
+  ])
+  const seen = new Set()
+  const out = []
+  for (const row of [...(byPath.data || []), ...(byType.data || [])]) {
+    if (seen.has(row.id)) continue
+    seen.add(row.id)
+    out.push(row)
+    if (out.length >= max) break
+  }
+  return out
+}
+
 // Count of cases currently in the training set.
 export async function trainingCount() {
   if (!supabase) return 0

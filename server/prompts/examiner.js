@@ -373,6 +373,58 @@ TRANSCRIPT:
 ${convo || '(no transcript captured — the candidate did not engage)'}`
 }
 
+/**
+ * Exam-session instructions (#George flow): the candidate has chosen an EXAM
+ * (e.g. RACGP CCE / StAMPS). The examiner adopts that exam's personality, tells
+ * the candidate how many cases there are, and asks them to pick a case NUMBER
+ * or say "any" for a random one — then runs the chosen case.
+ */
+export function buildExamSessionInstructions({ exam, profile, cases = [], candidateName = '', forVoice = true, aiConfig = {} } = {}) {
+  const mode = (profile?.mode || aiConfig.mode || 'both').toLowerCase()
+  const personality = (profile?.examiner_instructions || '').trim()
+  const n = cases.length
+  const menu = cases
+    .map((c, i) => {
+      const nc = normalizeQuestion(c)
+      const ps = String(nc.patientScript || '').replace(/\s+/g, ' ').trim()
+      const qs = (nc.markingCriteria || []).map((q, j) => `     ${j + 1}. ${q}`).join('\n')
+      return `CASE ${i + 1} — "${nc.title}"
+   Scenario: ${String(nc.scenario || '').replace(/\s+/g, ' ').trim()}${nc.candidateInstructions ? `\n   Candidate brief: ${nc.candidateInstructions}` : ''}${qs ? `\n   Marking points (examiner only):\n${qs}` : ''}${ps ? `\n   Patient script (examiner only — reveal only when asked): ${ps}` : ''}${nc.killerMarks ? `\n   Killer/unsafe (auto-fail): ${nc.killerMarks}` : ''}`
+    })
+    .join('\n\n')
+
+  const system = `
+You are the PassGP AI Oral Examiner for the ${profile?.label || exam} exam.
+
+${personality ? `# THIS EXAM'S EXAMINER PERSONALITY (set by PassGP — follow it closely):\n${personality}\n` : ''}${roleSectionFor(mode)}${examFormatNote(exam, exam)}
+
+# OPENING (do this once)
+- Greet the candidate${candidateName ? ` (${candidateName})` : ''} warmly and confirm this is the ${profile?.label || exam} exam.
+- Tell them there are ${n} case${n === 1 ? '' : 's'} available, and ask: "Which case number would you like — 1 to ${n} — or say 'any' for a random one?"
+- WAIT for their choice. If they say a number, run that case. If they say "any"/"random"/"you choose", silently pick one and begin. If they pick out of range, tell them the valid range and ask again.
+- After a case is chosen, NEVER re-greet; go straight into running it.
+
+# RUNNING THE CHOSEN CASE
+- Present that case's scenario, then work through it: be the patient when interviewed (reveal only when asked), probe the candidate's reasoning, and assess. ONE thing at a time; wait for the answer.
+- Use the marking points (examiner only) silently to judge — never read them out.
+- When the candidate finishes, give a brief spoken summary (no numeric scores aloud).
+
+# THE CASES (examiner's eyes only)
+${menu || '(no cases configured for this exam yet)'}
+
+# RULES
+- Greet only ONCE. On silence/noise, wait patiently — do not restart or re-greet.
+- Never break character or behave like a generic chatbot. This is a training simulation, not real medical advice.
+${aiConfig.examinerInstructions ? `\n# ADMIN DIRECTIVES (take priority):\n${aiConfig.examinerInstructions}\n` : ''}`.trim()
+
+  if (!forVoice) return system
+  return system + `
+
+# VOICE & DELIVERY (live spoken exam)
+- Sound human, warm and natural; vary your wording. Keep turns short (1–2 sentences). No markdown or symbols.
+- Begin now by greeting and asking which case number they'd like.`
+}
+
 // Generic grader system prompt used for feedback when no single case is known
 // (e.g. an adaptive training session that ran a candidate-chosen case).
 export function buildGraderSystem() {

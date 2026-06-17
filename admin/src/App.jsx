@@ -12,6 +12,7 @@ import Sessions from './pages/Sessions'
 import Transcripts from './pages/Transcripts'
 import Analytics from './pages/Analytics'
 import AIConfig from './pages/AIConfig'
+import ExamProfiles from './pages/ExamProfiles'
 import Settings from './pages/Settings'
 
 function Protected({ children }) {
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="sessions" element={<Sessions />} />
         <Route path="transcripts" element={<Transcripts />} />
         <Route path="analytics" element={<Analytics />} />
+        <Route path="exam-profiles" element={<ExamProfiles />} />
         <Route path="ai-config" element={<AIConfig />} />
         <Route path="settings" element={<Settings />} />
       </Route>

@@ -10,9 +10,13 @@ import {
   buildGraderSystem,
   buildFeedbackUserPrompt,
   buildMarksFeedbackPrompt,
+  buildExamSessionInstructions,
   normalizeQuestion,
 } from './prompts/examiner.js'
-import { getRandomQuestion, getQuestionById, getTrainingPool, getCircuit, saveSession } from './db/repo.js'
+import {
+  getRandomQuestion, getQuestionById, getTrainingPool, getCircuit, saveSession,
+  getCandidateExams, getExamProfile, getExamCases,
+} from './db/repo.js'
 import { sendSessionSummary } from './email.js'
 import { parseClinicalCase, jotformReady, listCaseForms, deriveExamType } from './integrations/jotform.js'
 import { supabase } from './db/supabase.js'
@@ -133,6 +137,17 @@ app.get('/api/widget-theme', async (_req, res) => {
   }
 })
 
+// Public: exams a candidate can choose (those with trained cases). Drives the
+// candidate registration "exam type" dropdown.
+app.get('/api/exam-profiles', async (_req, res) => {
+  try {
+    const exams = await getCandidateExams()
+    res.json({ exams })
+  } catch {
+    res.json({ exams: [] })
+  }
+})
+
 const MAINTENANCE_MSG =
   'Our AI examiner is currently being updated with new exam cases and is briefly unavailable. Please check back again shortly — thank you for your patience! 🙏'
 
@@ -181,12 +196,27 @@ app.post('/api/realtime/session', async (req, res) => {
         durationSeconds: Number(rawCase.duration_seconds) > 0 ? Number(rawCase.duration_seconds) : 480,
       }
     } else {
-      // Adaptive, category-aware session across the training set (optionally
-      // locked to a single admin-chosen exam area).
-      const pool = await getTrainingPool(16, focusExam || examType || '')
-      if (!pool.cases.length) return res.status(409).json({ maintenance: true, error: MAINTENANCE_MSG })
-      instructions = buildPoolInstructions({ categories: pool.categories, cases: pool.cases, candidateName, forVoice: true, aiConfig })
-      meta = { questionId: null, formId: null, questionTitle: 'Adaptive training session', examType: focusExam || '', categories: pool.categories, durationSeconds: 900 }
+      // The candidate has chosen an EXAM (e.g. RACGP CCE / StAMPS). Run an
+      // exam session with that exam's personality and a "pick a case number"
+      // menu (George's flow). Admin focusExam can force the exam.
+      const chosenExam = (focusExam || examType || '').trim()
+      const examCases = chosenExam ? await getExamCases(chosenExam) : []
+      if (chosenExam && examCases.length) {
+        const profile = await getExamProfile(chosenExam)
+        instructions = buildExamSessionInstructions({ exam: chosenExam, profile, cases: examCases, candidateName, forVoice: true, aiConfig })
+        meta = {
+          questionId: null, formId: null,
+          questionTitle: `${profile?.label || chosenExam} exam`,
+          examType: chosenExam,
+          categories: [], durationSeconds: 900,
+        }
+      } else {
+        // Fallback: adaptive, category-aware session across the whole training set.
+        const pool = await getTrainingPool(16, focusExam || '')
+        if (!pool.cases.length) return res.status(409).json({ maintenance: true, error: MAINTENANCE_MSG })
+        instructions = buildPoolInstructions({ categories: pool.categories, cases: pool.cases, candidateName, forVoice: true, aiConfig })
+        meta = { questionId: null, formId: null, questionTitle: 'Adaptive training session', examType: focusExam || '', categories: pool.categories, durationSeconds: 900 }
+      }
     }
 
     const sessionBody = JSON.stringify({
@@ -599,6 +629,55 @@ app.get('/api/admin/questions', requireAdmin, async (_req, res) => {
       from += 1000
     }
     res.json({ questions: all, total: all.length })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Admin: list exam profiles merged with the exams that actually have cases.
+app.get('/api/admin/exam-profiles', requireAdmin, async (_req, res) => {
+  try {
+    const exams = await getCandidateExams() // [{exam_key,label,caseCount}] (enabled only)
+    const { data: profs } = await supabase.from('exam_profiles').select('*').order('sort')
+    const pmap = new Map((profs || []).map((p) => [p.exam_key, p]))
+    // also include exams present in data that have no profile yet
+    const counts = new Map(exams.map((e) => [e.exam_key, e.caseCount]))
+    // and exams that have a profile but maybe 0 trained cases
+    const keys = new Set([...(profs || []).map((p) => p.exam_key), ...exams.map((e) => e.exam_key)])
+    const rows = [...keys].map((key) => {
+      const p = pmap.get(key) || {}
+      return {
+        exam_key: key,
+        label: p.label || key,
+        examiner_instructions: p.examiner_instructions || '',
+        mode: p.mode || 'both',
+        enabled: p.enabled ?? true,
+        caseCount: counts.get(key) || 0,
+        hasProfile: pmap.has(key),
+      }
+    }).sort((a, b) => a.label.localeCompare(b.label))
+    res.json({ profiles: rows })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Admin: create/update an exam profile (upsert by exam_key).
+app.put('/api/admin/exam-profiles/:examKey', requireAdmin, async (req, res) => {
+  try {
+    const exam_key = req.params.examKey
+    const { label, examiner_instructions, mode, enabled } = req.body || {}
+    const payload = {
+      exam_key,
+      label: label ?? exam_key,
+      examiner_instructions: examiner_instructions ?? '',
+      mode: ['both', 'examiner', 'patient'].includes(mode) ? mode : 'both',
+      enabled: enabled !== false,
+      updated_at: new Date().toISOString(),
+    }
+    const { data, error } = await supabase.from('exam_profiles').upsert(payload, { onConflict: 'exam_key' }).select('*').single()
+    if (error) return res.status(500).json({ error: error.message })
+    res.json({ profile: data })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
