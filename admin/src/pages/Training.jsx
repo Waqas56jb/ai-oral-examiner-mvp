@@ -84,6 +84,12 @@ export default function Training() {
     () => (docs || []).filter((d) => d.in_training && inCat(d) && inPathway(d) && matches(d, qT)),
     [docs, cat, pathway, qT] // eslint-disable-line
   )
+  // When the Available search finds nothing, surface matching cases that are
+  // ALREADY in the training set (so a "stamps" search still shows them).
+  const trainedMatches = useMemo(
+    () => (qA.trim() ? (docs || []).filter((d) => d.in_training && matches(d, qA)) : []),
+    [docs, qA] // eslint-disable-line
+  )
   const selIds = Object.keys(sel).filter((k) => sel[k])
 
   const setTraining = async (ids, value) => {
@@ -209,7 +215,25 @@ export default function Training() {
           </div>
           <div className="train-list">
             {available.length === 0 ? (
-              <div className="train-empty">No available documents in this category.</div>
+              trainedMatches.length > 0 ? (
+                <div>
+                  <div className="train-empty" style={{ paddingBottom: 8 }}>
+                    No <em>untrained</em> cases match “{qA}”. {trainedMatches.length} matching case{trainedMatches.length === 1 ? ' is' : 's are'} already in your Training Set →
+                  </div>
+                  {trainedMatches.slice(0, 100).map((d) => (
+                    <div key={d.id} className="train-row" style={{ opacity: 0.92 }}>
+                      <Badge color="green">In training</Badge>
+                      <span className="train-row__title">{d.title}</span>
+                      <Badge color="violet">{d.exam_type}</Badge>
+                      {d.pathway && <Badge color="blue">{d.pathway}</Badge>}
+                      <IconButton icon={<FiEye />} onClick={() => view(d)} title="View" />
+                      <Button size="sm" variant="ghost" onClick={() => setTraining([d.id], false)} icon={<FiChevronLeft />}>Remove</Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="train-empty">{qA.trim() ? `No cases match “${qA}”.` : 'No available documents in this category.'}</div>
+              )
             ) : (
               available.slice(0, 500).map((d) => (
                 <div key={d.id} className="train-row">
