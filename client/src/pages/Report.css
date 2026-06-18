@@ -427,3 +427,8 @@
 .rp-email-status[data-state="sending"] { color: #6366f1; }
 .rp-email-status[data-state="sent"] { color: #16a34a; }
 .rp-email-status[data-state="error"] { color: #d97706; }
+
+/* Manual email control in the report toolbar */
+.rp-email-box { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rp-email-input { padding: 8px 12px; border: 1px solid #d6dbe6; border-radius: 9px; font-size: 0.85rem; min-width: 180px; outline: none; }
+.rp-email-input:focus { border-color: #6366f1; }

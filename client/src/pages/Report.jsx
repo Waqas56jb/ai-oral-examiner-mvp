@@ -14,16 +14,11 @@ export default function Report() {
   const { sessionData, clearSession } = useExam()
   const reportRef = useRef(null)
   const [exporting, setExporting] = useState(false)
+  const [emailState, setEmailState] = useState('idle') // idle | sending | sent | error
+  const [emailTo, setEmailTo] = useState('')
+  const autoSentRef = useRef(false)
 
-  useEffect(() => {
-    if (!sessionData) {
-      const t = setTimeout(() => navigate('/'), 100)
-      return () => clearTimeout(t)
-    }
-  }, [sessionData, navigate])
-
-  if (!sessionData) return null
-
+  const sd = sessionData || {}
   const {
     durationSec = 0,
     questionsAnswered = 0,
@@ -37,9 +32,9 @@ export default function Report() {
     pathway = '',
     isMock = false,
     stations = [],
-  } = sessionData
+  } = sd
 
-  const fb = sessionData.feedback || {}
+  const fb = sd.feedback || {}
   const domains =
     fb.domains && fb.domains.length
       ? fb.domains
@@ -107,36 +102,49 @@ export default function Report() {
     }
   }
 
-  // Auto-email this exact report (with charts) to the candidate, once, after the
-  // charts have rendered.
-  const [emailState, setEmailState] = useState('idle') // idle | sending | sent | error
+  // Build + email the exact on-screen report (with charts) to an address.
+  async function sendReportEmail(to) {
+    const email = String(to || '').trim()
+    if (!email || !reportRef.current) { setEmailState('error'); return }
+    try {
+      setEmailState('sending')
+      const pdf = await buildPdf('jpeg') // smaller image for email
+      const dataUri = pdf.output('datauristring') // data:application/pdf;base64,...
+      const res = await fetch(apiUrl('/api/email-report'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          candidateEmail: email, candidateName,
+          examType: pathway || examType,
+          pdfBase64: dataUri,
+          report: { ...fb, examiner_comments: detailed, pass_fail: passFail },
+        }),
+      })
+      const d = await res.json().catch(() => ({}))
+      setEmailState(d?.sent ? 'sent' : 'error')
+    } catch (e) {
+      console.error('Email report failed:', e)
+      setEmailState('error')
+    }
+  }
+
+  // Redirect home if there's no session.
   useEffect(() => {
-    if (!candidateEmail || !reportRef.current) return
-    let cancelled = false
-    const t = setTimeout(async () => {
-      try {
-        setEmailState('sending')
-        const pdf = await buildPdf('jpeg') // smaller for email
-        const dataUri = pdf.output('datauristring') // data:application/pdf;base64,...
-        if (cancelled) return
-        const res = await fetch(apiUrl('/api/email-report'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            candidateEmail, candidateName,
-            examType: pathway || examType,
-            pdfBase64: dataUri,
-            report: { ...fb, examiner_comments: detailed, pass_fail: passFail },
-          }),
-        })
-        const d = await res.json().catch(() => ({}))
-        if (!cancelled) setEmailState(d?.sent ? 'sent' : 'error')
-      } catch {
-        if (!cancelled) setEmailState('error')
-      }
-    }, 2000) // let recharts finish animating before capture
-    return () => { cancelled = true; clearTimeout(t) }
+    if (!sessionData) { const t = setTimeout(() => navigate('/'), 100); return () => clearTimeout(t) }
+  }, [sessionData, navigate])
+
+  // Prefill the manual email box with the registered email.
+  useEffect(() => { if (candidateEmail) setEmailTo(candidateEmail) }, [candidateEmail])
+
+  // Auto-email once, after the charts have had time to render.
+  useEffect(() => {
+    if (!sessionData || !candidateEmail || autoSentRef.current) return
+    autoSentRef.current = true
+    const t = setTimeout(() => { sendReportEmail(candidateEmail) }, 2200)
+    return () => clearTimeout(t)
   }, []) // eslint-disable-line
+
+  if (!sessionData) return null
 
   return (
     <div className="rp-page">
@@ -145,13 +153,21 @@ export default function Report() {
         <button className="rp-tbtn rp-tbtn-ghost" onClick={() => { clearSession(); navigate('/exam') }}>
           ← New session
         </button>
-        {candidateEmail && (
-          <span className="rp-email-status" data-state={emailState}>
-            {emailState === 'sending' && <><span className="rp-spin" /> Emailing report…</>}
-            {emailState === 'sent' && <>✓ Report emailed to {candidateEmail}</>}
-            {emailState === 'error' && <>Couldn’t email — please download below</>}
-          </span>
-        )}
+        <div className="rp-email-box">
+          {emailState === 'sent' ? (
+            <span className="rp-email-status" data-state="sent">✓ Report emailed to {emailTo}</span>
+          ) : (
+            <>
+              <input className="rp-email-input" type="email" value={emailTo} placeholder="your@email.com"
+                onChange={(e) => setEmailTo(e.target.value)} />
+              <button className="rp-tbtn rp-tbtn-ghost" onClick={() => sendReportEmail(emailTo)}
+                disabled={emailState === 'sending' || !emailTo.trim()}>
+                {emailState === 'sending' ? <><span className="rp-spin" /> Sending…</> : '✉ Email report'}
+              </button>
+            </>
+          )}
+          {emailState === 'error' && <span className="rp-email-status" data-state="error">Couldn’t send — try again</span>}
+        </div>
         <button className="rp-tbtn rp-tbtn-primary" onClick={downloadPDF} disabled={exporting}>
           {exporting ? (
             <>
