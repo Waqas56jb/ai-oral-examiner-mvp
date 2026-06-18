@@ -97,6 +97,9 @@ export default function VoiceAgent() {
   const endRef = useRef(null)
   const startSessionRef = useRef(null)
 
+  // Candidate self-service history (#6): look up past sessions by email.
+  const [showHistory, setShowHistory] = useState(false)
+
   // Mock-exam circuit (#10): multiple stations run sequentially.
   const isMock = params.mock > 0
   const circuitRef = useRef([])           // [{questionId, title, examType, durationSeconds}]
@@ -409,9 +412,15 @@ export default function VoiceAgent() {
             <button className="va-reg-btn" type="submit" disabled={!reg.name.trim() || (!params.formId && !params.caseId && exams.length > 0 && !reg.exam) || loadingCircuit}>
               {loadingCircuit ? 'Preparing circuit…' : isMock ? 'Start mock exam →' : 'Start exam →'}
             </button>
+
+            <button type="button" className="va-reg-link" onClick={() => setShowHistory(true)}>
+              View my past results
+            </button>
           </form>
         </div>
       )}
+
+      {showHistory && <HistoryPanel defaultEmail={reg.email} onClose={() => setShowHistory(false)} />}
 
       <div className={`va-card state-${examState}`} style={{ filter: registered ? 'none' : 'blur(4px)', pointerEvents: registered ? 'auto' : 'none' }}>
 
@@ -535,4 +544,96 @@ function fmtTime(sec) {
   const m = String(Math.floor(sec / 60)).padStart(2, '0')
   const s = String(sec % 60).padStart(2, '0')
   return `${m}:${s}`
+}
+
+// Candidate self-service history (#6): look up your own past sessions by email.
+function HistoryPanel({ defaultEmail = '', onClose }) {
+  const [email, setEmail] = useState(defaultEmail)
+  const [sessions, setSessions] = useState(null) // null = not searched yet
+  const [loading, setLoading] = useState(false)
+  const [open, setOpen] = useState(null) // expanded session id
+
+  const lookup = async (e) => {
+    e?.preventDefault?.()
+    if (!email.trim()) return
+    setLoading(true)
+    try {
+      const res = await fetch(apiUrl(`/api/candidate/history?email=${encodeURIComponent(email.trim())}`))
+      const d = await res.json()
+      setSessions(Array.isArray(d?.sessions) ? d.sessions : [])
+    } catch {
+      setSessions([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Auto-look up if we already have the email from registration.
+  useEffect(() => { if (defaultEmail.trim()) lookup() }, []) // eslint-disable-line
+
+  const scoreOf = (s) => {
+    const ov = s.score_override
+    if (s.marks_awarded != null && s.total_marks) return `${s.marks_awarded}/${s.total_marks}`
+    const v = ov != null ? ov : s.score
+    return v != null ? `${Math.round(v / 10)}/10` : '—'
+  }
+  const fmtDate = (d) => { try { return new Date(d).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) } catch { return '' } }
+  const arr = (v) => (Array.isArray(v) ? v : [])
+
+  return (
+    <div className="va-reg-overlay">
+      <div className="va-hist-card">
+        <div className="va-hist-head">
+          <div className="va-reg-title">Your exam history</div>
+          <button className="va-hist-x" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+
+        <form className="va-hist-search" onSubmit={lookup}>
+          <input className="va-reg-input" style={{ marginBottom: 0 }} type="email" value={email}
+            onChange={(e) => setEmail(e.target.value)} placeholder="Enter your email to view your results" />
+          <button className="va-hist-btn" type="submit" disabled={!email.trim() || loading}>{loading ? '…' : 'Look up'}</button>
+        </form>
+
+        <div className="va-hist-list">
+          {sessions === null ? (
+            <p className="va-hist-empty">Enter the email you registered with to see your past attempts.</p>
+          ) : sessions.length === 0 ? (
+            <p className="va-hist-empty">No past results found for that email.</p>
+          ) : (
+            sessions.map((s) => {
+              const pass = s.pass_fail || s.result || ''
+              const fail = /fail|unsafe/i.test(pass)
+              return (
+                <div key={s.id} className="va-hist-item">
+                  <div className="va-hist-row" onClick={() => setOpen(open === s.id ? null : s.id)}>
+                    <div>
+                      <div className="va-hist-title">{s.pathway || s.exam_type || 'Exam'}{s.case_title ? ` · ${s.case_title}` : ''}</div>
+                      <div className="va-hist-meta">{fmtDate(s.created_at)}{s.candidate_name ? ` · ${s.candidate_name}` : ''}</div>
+                    </div>
+                    <div className="va-hist-right">
+                      <span className="va-hist-score">{scoreOf(s)}</span>
+                      {pass && <span className={`va-hist-badge ${fail ? 'fail' : 'pass'}`}>{pass}</span>}
+                    </div>
+                  </div>
+                  {open === s.id && (
+                    <div className="va-hist-detail">
+                      {s.summary && <p>{s.summary}</p>}
+                      {arr(s.improvements).length > 0 && (
+                        <><div className="va-hist-sub">Areas to improve</div><ul>{arr(s.improvements).map((it, i) => <li key={i}>{it}</li>)}</ul></>
+                      )}
+                      {arr(s.missed_items).length > 0 && (
+                        <><div className="va-hist-sub">Missed items</div><ul>{arr(s.missed_items).map((it, i) => <li key={i}>{it}</li>)}</ul></>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })
+          )}
+        </div>
+
+        <button className="va-reg-btn" onClick={onClose} style={{ marginTop: 4 }}>Back</button>
+      </div>
+    </div>
+  )
 }

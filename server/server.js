@@ -148,6 +148,25 @@ app.get('/api/exam-profiles', async (_req, res) => {
   }
 })
 
+// Public: a candidate's own past sessions, looked up by the email they registered
+// with. Returns their attempt history (scores, pass/fail, feedback) — no transcript.
+app.get('/api/candidate/history', async (req, res) => {
+  try {
+    const email = String(req.query.email || '').trim().toLowerCase()
+    if (!email || !supabase) return res.json({ sessions: [] })
+    const { data } = await supabase
+      .from('exam_sessions')
+      .select('id, created_at, candidate_name, exam_type, pathway, case_title, duration_sec, score, score_override, pass_fail, result, marks_awarded, total_marks, killer_failed, summary, strengths, improvements, missed_items, unsafe_areas')
+      .ilike('candidate_email', email)
+      .eq('status', 'completed')
+      .order('created_at', { ascending: false })
+      .limit(200)
+    res.json({ sessions: data || [] })
+  } catch {
+    res.json({ sessions: [] })
+  }
+})
+
 const MAINTENANCE_MSG =
   'Our AI examiner is currently being updated with new exam cases and is briefly unavailable. Please check back again shortly — thank you for your patience! 🙏'
 

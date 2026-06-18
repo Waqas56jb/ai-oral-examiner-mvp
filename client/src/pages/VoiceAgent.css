@@ -557,3 +557,38 @@
 .va-station-dot { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,0.18); transition: background .2s; }
 .va-station-dot.active { background: var(--c2, #8b5cf6); box-shadow: 0 0 0 3px rgba(139,92,246,0.25); }
 .va-station-dot.done { background: #10b981; }
+
+/* ── Candidate history (#6) ─────────────── */
+.va-reg-link {
+  margin-top: 12px; background: none; border: none; cursor: pointer;
+  color: var(--c2, #8b5cf6); font-size: 0.85rem; font-weight: 600; text-decoration: underline; align-self: center;
+}
+.va-hist-card {
+  width: 100%; max-width: 440px; max-height: 86vh; display: flex; flex-direction: column;
+  background: #0f1428; border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px; padding: 22px 22px; box-shadow: 0 30px 80px rgba(0,0,0,0.5);
+}
+.va-hist-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.va-hist-x { background: none; border: none; color: #9aa3c0; font-size: 1rem; cursor: pointer; }
+.va-hist-search { display: flex; gap: 8px; margin-bottom: 14px; }
+.va-hist-btn {
+  border: none; cursor: pointer; padding: 0 16px; border-radius: 11px; font-weight: 700; font-size: 0.88rem;
+  background: linear-gradient(135deg, var(--c1, #6366f1), var(--c2, #8b5cf6)); color: #fff; white-space: nowrap;
+}
+.va-hist-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.va-hist-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 9px; min-height: 80px; }
+.va-hist-empty { color: #9aa3c0; font-size: 0.88rem; text-align: center; padding: 26px 10px; }
+.va-hist-item { background: #070b18; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; overflow: hidden; }
+.va-hist-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; cursor: pointer; }
+.va-hist-title { color: #fff; font-size: 0.9rem; font-weight: 600; line-height: 1.35; }
+.va-hist-meta { color: #9aa3c0; font-size: 0.76rem; margin-top: 3px; }
+.va-hist-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.va-hist-score { color: #fff; font-weight: 800; font-size: 1.05rem; }
+.va-hist-badge { font-size: 0.68rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; }
+.va-hist-badge.pass { background: #dcfce7; color: #15803d; }
+.va-hist-badge.fail { background: #fee2e2; color: #b91c1c; }
+.va-hist-detail { border-top: 1px solid rgba(255,255,255,0.08); padding: 12px 14px; color: #c7cde0; font-size: 0.84rem; line-height: 1.55; }
+.va-hist-detail p { margin-bottom: 8px; }
+.va-hist-sub { color: #fff; font-weight: 700; font-size: 0.76rem; margin: 8px 0 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+.va-hist-detail ul { padding-left: 18px; }
+.va-hist-detail li { margin: 2px 0; }
