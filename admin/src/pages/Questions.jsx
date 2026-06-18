@@ -103,7 +103,7 @@ export default function Questions() {
     return rows.filter((r) => {
       if (cat !== 'All' && r.exam_type !== cat) return false
       if (!term) return true
-      return `${r.title} ${r.stem} ${r.external_ref}`.toLowerCase().includes(term)
+      return `${r.title} ${r.exam_type} ${r.pathway || ''} ${r.external_ref}`.toLowerCase().includes(term)
     })
   }, [rows, q, cat])
 
@@ -503,6 +503,15 @@ function ImportModal({ onClose, onDone }) {
             <strong>{forms.length.toLocaleString()}</strong> clinical case forms found on Jotform. Import the whole bank, or search & select specific cases.
           </p>
           <Search value={q} onChange={setQ} placeholder="Search cases by title…" />
+          <div className="flex items-center between" style={{ margin: '10px 2px 0', flexWrap: 'wrap', gap: 8 }}>
+            <label className="flex items-center gap" style={{ fontSize: '0.84rem', cursor: 'pointer' }}>
+              <input type="checkbox" style={{ width: 15, height: 15, accentColor: 'var(--accent)' }}
+                checked={filtered.length > 0 && filtered.every((f) => sel[f.id])}
+                onChange={(e) => { const on = e.target.checked; setSel((s) => { const n = { ...s }; filtered.forEach((f) => { n[f.id] = on }); return n }) }} />
+              Select all {filtered.length.toLocaleString()} matching{q.trim() ? ` "${q.trim()}"` : ''}
+            </label>
+            <span className="muted" style={{ fontSize: '0.8rem' }}>{selectedForms.length.toLocaleString()} selected</span>
+          </div>
           <div className="scrollbox" style={{ border: '1px solid var(--line)', borderRadius: 12, marginTop: 10 }}>
             {filtered.slice(0, 300).map((f) => (
               <label key={f.id} className="flex items-center gap" style={{ padding: '11px 14px', borderBottom: '1px solid var(--line-2)', cursor: 'pointer' }}>
@@ -513,7 +522,7 @@ function ImportModal({ onClose, onDone }) {
             ))}
             {filtered.length > 300 && (
               <div className="muted" style={{ padding: 12, textAlign: 'center', fontSize: '0.85rem' }}>
-                Showing first 300 of {filtered.length.toLocaleString()}. Use search to narrow down, or just “Import all”.
+                Showing first 300 of {filtered.length.toLocaleString()} — but “Select all matching” above selects every one, then use “Import selected”.
               </div>
             )}
           </div>

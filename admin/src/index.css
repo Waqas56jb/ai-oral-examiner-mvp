@@ -459,3 +459,6 @@ table.tbl { width: 100%; border-collapse: collapse; }
 .status-pick--draft    { background: #fef3c7; color: #b45309; border-color: #fde68a; }
 .status-pick--disabled { background: #f1f5f9; color: #64748b; }
 .status-pick--archived { background: #ede9fe; color: #6d28d9; border-color: #ddd6fe; }
+
+/* Training panel bulk action bar */
+.train-bulkbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 14px; border-top: 1px solid var(--line-2); background: #fbfaff; }

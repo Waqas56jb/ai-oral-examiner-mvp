@@ -808,6 +808,47 @@ app.delete('/api/admin/questions/:id', requireAdmin, async (req, res) => {
   }
 })
 
+// Admin: BULK update a field on many cases (e.g. assign them to an exam by
+// setting pathway, or change status). Body: { ids: [], patch: {pathway?, exam_type?, status?, ...} }
+app.post('/api/admin/questions/bulk-update', requireAdmin, async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids : []
+    const patch = pickCaseFields(req.body?.patch || {})
+    if (!ids.length) return res.json({ updated: 0 })
+    if (!Object.keys(patch).length) return res.status(400).json({ error: 'Nothing to update' })
+    // keep is_active in sync when status changes
+    if (patch.status && !('is_active' in patch)) patch.is_active = patch.status === 'active'
+    let updated = 0
+    for (let i = 0; i < ids.length; i += 500) {
+      const chunk = ids.slice(i, i + 500)
+      const { data, error } = await supabase.from('exam_questions').update(patch).in('id', chunk).select('id')
+      if (error) return res.status(500).json({ error: error.message })
+      updated += data?.length || 0
+    }
+    res.json({ updated })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Admin: BULK delete cases. Body: { ids: [] }
+app.post('/api/admin/questions/bulk-delete', requireAdmin, async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids : []
+    if (!ids.length) return res.json({ deleted: 0 })
+    let deleted = 0
+    for (let i = 0; i < ids.length; i += 500) {
+      const chunk = ids.slice(i, i + 500)
+      const { data, error } = await supabase.from('exam_questions').delete().in('id', chunk).select('id')
+      if (error) return res.status(500).json({ error: error.message })
+      deleted += data?.length || 0
+    }
+    res.json({ deleted })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // Admin: push/remove a batch of cases into/out of the training set (persists via service key)
 app.post('/api/admin/training/set', requireAdmin, async (req, res) => {
   try {
