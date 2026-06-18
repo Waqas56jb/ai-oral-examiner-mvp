@@ -15,7 +15,7 @@ import {
 } from './prompts/examiner.js'
 import {
   getRandomQuestion, getQuestionById, getTrainingPool, getCircuit, saveSession,
-  getCandidateExams, getExamProfile, getExamProfilesWithCounts, getExamCases,
+  getCandidateExams, getExamProfile, getExamProfilesWithCounts, getExamCases, canonicalExam,
 } from './db/repo.js'
 import { sendSessionSummary } from './email.js'
 import { parseClinicalCase, jotformReady, listCaseForms, deriveExamType } from './integrations/jotform.js'
@@ -834,6 +834,59 @@ app.post('/api/admin/questions/bulk-update', requireAdmin, async (req, res) => {
       updated += data?.length || 0
     }
     res.json({ updated })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Admin: ASSIGN EXAMS FROM CSV. Body: { rows: [{ ref?, title?, exam }] }.
+// Matches each row to a case by Jotform form ID (external_ref) first, else by
+// exact title, and sets its exam (pathway = canonical exam name).
+app.post('/api/admin/exams/assign-csv', requireAdmin, async (req, res) => {
+  try {
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : []
+    if (!rows.length) return res.json({ matched: 0, updated: 0, unmatched: [], byExam: {} })
+
+    // Load all cases once (paginated) for matching.
+    let cases = []
+    let from = 0
+    while (true) {
+      const { data, error } = await supabase.from('exam_questions').select('id, external_ref, title').range(from, from + 999)
+      if (error) return res.status(500).json({ error: error.message })
+      cases = cases.concat(data || [])
+      if (!data || data.length < 1000) break
+      from += 1000
+    }
+    const byRef = new Map(cases.filter((c) => c.external_ref).map((c) => [String(c.external_ref).trim(), c.id]))
+    const byTitle = new Map(cases.filter((c) => c.title).map((c) => [c.title.trim().toLowerCase(), c.id]))
+
+    // Resolve each row → { id, exam }, grouping ids by target exam.
+    const byExamIds = new Map()
+    const unmatched = []
+    for (const r of rows) {
+      const exam = canonicalExam(r.exam)
+      if (!exam) { unmatched.push({ ...r, reason: 'no exam' }); continue }
+      const ref = r.ref != null ? String(r.ref).trim() : ''
+      const title = r.title != null ? String(r.title).trim().toLowerCase() : ''
+      const id = (ref && byRef.get(ref)) || (title && byTitle.get(title))
+      if (!id) { unmatched.push({ ...r, reason: 'case not found' }); continue }
+      if (!byExamIds.has(exam)) byExamIds.set(exam, [])
+      byExamIds.get(exam).push(id)
+    }
+
+    // Apply per exam in chunks.
+    let updated = 0
+    const byExam = {}
+    for (const [exam, ids] of byExamIds) {
+      byExam[exam] = ids.length
+      for (let i = 0; i < ids.length; i += 500) {
+        const chunk = ids.slice(i, i + 500)
+        const { data, error } = await supabase.from('exam_questions').update({ pathway: exam }).in('id', chunk).select('id')
+        if (error) return res.status(500).json({ error: error.message })
+        updated += data?.length || 0
+      }
+    }
+    res.json({ matched: updated, updated, unmatched, byExam })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }

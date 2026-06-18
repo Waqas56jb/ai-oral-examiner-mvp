@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  FiPlus, FiEdit2, FiTrash2, FiDownloadCloud, FiUpload, FiHelpCircle, FiCheck, FiAlertCircle, FiPlay, FiExternalLink,
+  FiPlus, FiEdit2, FiTrash2, FiDownloadCloud, FiUpload, FiHelpCircle, FiCheck, FiAlertCircle, FiPlay, FiExternalLink, FiTag,
 } from 'react-icons/fi'
 import { supabase } from '../lib/supabase'
 import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from '../lib/api'
@@ -62,6 +62,7 @@ export default function Questions() {
   const [confirmDel, setConfirmDel] = useState(null)
   const [importOpen, setImportOpen] = useState(false)
   const [csvOpen, setCsvOpen] = useState(false)
+  const [assignOpen, setAssignOpen] = useState(false)
   const [preview, setPreview] = useState(null) // full case object
   const [error, setError] = useState('')
 
@@ -184,6 +185,7 @@ export default function Questions() {
         <div className="page-actions">
           <Button variant="ghost" icon={<FiDownloadCloud />} onClick={() => setImportOpen(true)}>Import from Jotform</Button>
           <Button variant="ghost" icon={<FiUpload />} onClick={() => setCsvOpen(true)}>Import CSV</Button>
+          <Button variant="ghost" icon={<FiTag />} onClick={() => setAssignOpen(true)}>Assign exams (CSV)</Button>
           <Button variant="ghost" loading={exporting} onClick={exportCsv}>Export CSV</Button>
           <Button icon={<FiPlus />} onClick={openNew}>Add question</Button>
         </div>
@@ -281,8 +283,105 @@ export default function Questions() {
 
       {importOpen && <ImportModal onClose={() => setImportOpen(false)} onDone={load} />}
       {csvOpen && <CsvImportModal onClose={() => setCsvOpen(false)} onDone={load} />}
+      {assignOpen && <AssignExamsModal onClose={() => setAssignOpen(false)} onDone={load} />}
       {preview && <PreviewModal q={preview} onClose={() => setPreview(null)} />}
     </>
+  )
+}
+
+// Pick a value from a CSV row object by trying several header-name variants
+// (case/space-insensitive), so it works with whatever Jotform exports.
+function pick(obj, names) {
+  const map = {}
+  for (const k of Object.keys(obj)) map[k.toLowerCase().replace(/[^a-z0-9]+/g, '')] = obj[k]
+  for (const n of names) { const v = map[n]; if (v != null && String(v).trim() !== '') return String(v).trim() }
+  return ''
+}
+
+function AssignExamsModal({ onClose, onDone }) {
+  const [rows, setRows] = useState(null) // [{ref,title,exam}]
+  const [fileName, setFileName] = useState('')
+  const [err, setErr] = useState('')
+  const [running, setRunning] = useState(false)
+  const [result, setResult] = useState(null)
+
+  const onFile = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setErr(''); setResult(null); setFileName(file.name)
+    try {
+      const objs = parseCsv(await file.text())
+      if (!objs.length) { setErr('No rows found in that CSV.'); setRows(null); return }
+      const mapped = objs.map((o) => ({
+        ref: pick(o, ['formid', 'externalref', 'id', 'jotformid', 'form']),
+        title: pick(o, ['title', 'formtitle', 'case', 'casetitle', 'name']),
+        exam: pick(o, ['exam', 'pathway', 'tag', 'folder', 'examtype', 'type']),
+      })).filter((r) => r.exam && (r.ref || r.title))
+      if (!mapped.length) { setErr('Could not find exam + (form ID or title) columns. Headers seen: ' + Object.keys(objs[0]).join(', ')); setRows(null); return }
+      setRows(mapped)
+    } catch (e2) {
+      setErr('Could not read that file: ' + e2.message)
+    }
+  }
+
+  const run = async () => {
+    setRunning(true); setErr('')
+    try {
+      let matched = 0, updated = 0, byExam = {}, unmatched = []
+      for (let i = 0; i < rows.length; i += 400) {
+        const d = await apiPost('/api/admin/exams/assign-csv', { rows: rows.slice(i, i + 400) })
+        matched += d.matched || 0; updated += d.updated || 0
+        ;(d.unmatched || []).forEach((u) => unmatched.push(u))
+        for (const [k, v] of Object.entries(d.byExam || {})) byExam[k] = (byExam[k] || 0) + v
+      }
+      setResult({ matched, updated, byExam, unmatched })
+      onDone()
+    } catch (e) {
+      setErr(e.message)
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  return (
+    <Modal
+      title="Assign exams from CSV"
+      onClose={running ? () => {} : onClose}
+      footer={result ? <Button onClick={onClose}>Done</Button> : (
+        <>
+          <Button variant="ghost" disabled={running} onClick={onClose}>Cancel</Button>
+          <Button loading={running} disabled={!rows?.length} icon={<FiTag />} onClick={run}>Assign {rows?.length || 0} case{rows?.length === 1 ? '' : 's'}</Button>
+        </>
+      )}
+    >
+      {err && <div className="alert alert--error"><FiAlertCircle /> {err}</div>}
+      {result ? (
+        <div>
+          <div className="alert alert--success" style={{ marginBottom: 12 }}>
+            <FiCheck /><div>Assigned <strong>{result.updated}</strong> case{result.updated === 1 ? '' : 's'} to exams.{result.unmatched.length ? ` ${result.unmatched.length} row(s) didn't match.` : ''}</div>
+          </div>
+          <div style={{ fontSize: '0.88rem' }}>
+            {Object.entries(result.byExam).map(([ex, n]) => <div key={ex}>• <strong>{ex}</strong>: {n}</div>)}
+          </div>
+          {result.unmatched.length > 0 && (
+            <details style={{ marginTop: 12 }}>
+              <summary className="muted" style={{ cursor: 'pointer' }}>{result.unmatched.length} unmatched rows</summary>
+              <div className="scrollbox" style={{ maxHeight: 160, marginTop: 8, fontSize: '0.82rem' }}>
+                {result.unmatched.slice(0, 200).map((u, i) => <div key={i} style={{ padding: '3px 8px' }}>{u.ref || u.title || '(blank)'} → {u.exam} <span className="muted">({u.reason})</span></div>)}
+              </div>
+            </details>
+          )}
+        </div>
+      ) : (
+        <>
+          <p className="muted" style={{ marginBottom: 12 }}>
+            Upload a CSV with an <strong>exam</strong> column plus a <strong>Form ID</strong> (matches the Jotform form ID we store) or an exact <strong>title</strong>. Exam values like <code>AMC</code>, <code>CCE</code>, <code>StAMPS</code>, <code>ACRRM</code>, <code>PESCI</code>, <code>KFP</code> are recognised automatically. Matching is by form ID first, then title.
+          </p>
+          <input type="file" accept=".csv,text/csv" onChange={onFile} />
+          {fileName && rows && <p className="muted" style={{ marginTop: 10 }}>{fileName} — <strong>{rows.length}</strong> rows ready (e.g. {rows.slice(0, 3).map((r) => `${r.ref || r.title}→${r.exam}`).join(', ')}…)</p>}
+        </>
+      )}
+    </Modal>
   )
 }
 

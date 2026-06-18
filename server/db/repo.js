@@ -144,6 +144,17 @@ function aliasesFor(examKey) {
   for (const list of Object.values(EXAM_ALIASES)) if (list.includes(n)) return list
   return [n]
 }
+// Map a free-text exam value (e.g. "amc", "STAMPS", "RACGP CCE") to the canonical
+// exam key. Falls back to the trimmed input for custom/unknown exams.
+export function canonicalExam(raw) {
+  const n = _norm(raw)
+  if (!n) return ''
+  for (const [key, list] of Object.entries(EXAM_ALIASES)) {
+    if (_norm(key) === n || list.includes(n)) return key
+  }
+  return String(raw).trim()
+}
+
 // Does a case (its exam_type / pathway) belong to this exam?
 function caseMatchesExam(c, examKey) {
   const aliases = aliasesFor(examKey)
