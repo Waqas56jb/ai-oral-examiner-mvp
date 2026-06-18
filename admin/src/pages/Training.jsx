@@ -232,7 +232,11 @@ export default function Training() {
                   ))}
                 </div>
               ) : (
-                <div className="train-empty">{qA.trim() ? `No cases match “${qA}”.` : 'No available documents in this category.'}</div>
+                <div className="train-empty">
+                  {qA.trim()
+                    ? <>No cases match “{qA}”.<br /><span style={{ fontSize: '0.82rem' }}>Try a case code (e.g. <strong>D11</strong>, <strong>B51</strong>, <strong>G24</strong>), a category, or an exam (<strong>CCE</strong>, <strong>StAMPS</strong>, <strong>KFP</strong>).</span></>
+                    : 'No available documents in this category.'}
+                </div>
               )
             ) : (
               available.slice(0, 500).map((d) => (
