@@ -125,8 +125,11 @@ export async function getCircuit({ count = 3, pathway = '', examType = '' } = {}
 // each. Lets short tags in the data (ACRRM, AMC, RACGP, CCE) line up with one
 // canonical profile (StAMPS (ACRRM), AMC Clinical, RACGP CCE…) — no duplicates.
 const _norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '')
+// Only UNAMBIGUOUS tags map to an exam. "RACGP" alone is NOT an exam (RACGP has
+// CCE, AKT and KFP), so it is deliberately excluded — a case only counts as CCE
+// if explicitly tagged "RACGP CCE" / "CCE".
 const EXAM_ALIASES = {
-  'RACGP CCE': ['racgpcce', 'racgp', 'cce'],
+  'RACGP CCE': ['racgpcce', 'cce'],
   'StAMPS (ACRRM)': ['stampsacrrm', 'stamps', 'acrrm', 'staamps'],
   'AMC Clinical': ['amcclinical', 'amc'],
   'PESCI': ['pesci'],

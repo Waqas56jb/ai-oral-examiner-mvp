@@ -63,13 +63,16 @@ export async function listCaseForms() {
   return forms.filter((f) => isCaseForm(f.title))
 }
 
-// Derive an exam pathway from the case category/title.
+// Derive a clinical category / exam tag from the case category/title.
+// IMPORTANT: never guess an exam — if there's no clear label, return 'Unassigned'
+// so PassGP assigns the correct exam explicitly (the Jotform forms do NOT reliably
+// carry the exam name). Falsely defaulting to RACGP is what made CCE inaccurate.
 export function deriveExamType(category, title) {
   const s = `${category || ''} ${title || ''}`.toUpperCase()
   for (const t of ['RACGP', 'ACRRM', 'AMC', 'PESCI', 'NZREX', 'FRANZCOG', 'KFP', 'AKT', 'CCE']) {
     if (s.includes(t)) return t
   }
-  return category ? category.split(';')[0].trim() : 'RACGP'
+  return category ? category.split(';')[0].trim() : 'Unassigned'
 }
 
 export async function getFormTitle(formId) {
