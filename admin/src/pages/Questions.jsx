@@ -7,6 +7,7 @@ import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from '../lib/api'
 import { Card, Button, IconButton, Badge, Search, EmptyState, PageLoader, Modal } from '../components/ui'
 import QuestionForm, { rowToForm, formToPayload, blankQuestion } from '../components/QuestionForm'
 import { fmtDate, toCsv, parseCsv, downloadFile } from '../lib/format'
+import { matchesSearch } from '../lib/search'
 
 // Full case CSV schema (#9). Order = column order in the exported file.
 const CSV_COLS = [
@@ -99,11 +100,9 @@ export default function Questions() {
   }, [rows])
 
   const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase()
     return rows.filter((r) => {
       if (cat !== 'All' && r.exam_type !== cat) return false
-      if (!term) return true
-      return `${r.title} ${r.exam_type} ${r.pathway || ''} ${r.external_ref}`.toLowerCase().includes(term)
+      return matchesSearch([r.title, r.exam_type, r.pathway, r.external_ref], q)
     })
   }, [rows, q, cat])
 

@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase'
 import { apiGet, apiPost, apiPut, apiDelete } from '../lib/api'
 import { Card, Button, IconButton, Badge, Search, EmptyState, PageLoader, Modal } from '../components/ui'
 import QuestionForm, { rowToForm, formToPayload, blankQuestion, PATHWAYS } from '../components/QuestionForm'
+import { matchesSearch } from '../lib/search'
 
 export default function Training() {
   const [docs, setDocs] = useState(null)
@@ -72,12 +73,9 @@ export default function Training() {
 
   const inCat = (d) => cat === 'All' || d.exam_type === cat
   const inPathway = (d) => pathway === 'All exams' || (d.pathway || '') === pathway
-  // Search matches title, clinical category (exam_type) AND exam (pathway).
-  const matches = (d, term) => {
-    if (!term.trim()) return true
-    const t = term.toLowerCase()
-    return `${d.title || ''} ${d.exam_type || ''} ${d.pathway || ''}`.toLowerCase().includes(t)
-  }
+  // Smart search across title, clinical category and exam — case/space/synonym
+  // aware (e.g. "stamps" finds ACRRM cases, "cce" finds RACGP).
+  const matches = (d, term) => matchesSearch([d.title, d.exam_type, d.pathway], term)
   const available = useMemo(
     () => (docs || []).filter((d) => !d.in_training && inCat(d) && inPathway(d) && matches(d, qA)),
     [docs, cat, pathway, qA] // eslint-disable-line
