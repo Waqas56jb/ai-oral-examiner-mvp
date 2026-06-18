@@ -425,6 +425,60 @@ ${aiConfig.examinerInstructions ? `\n# ADMIN DIRECTIVES (take priority):\n${aiCo
 - Begin now by greeting and asking which case number they'd like.`
 }
 
+/**
+ * Marks-aware grading for an EXAM session where the candidate verbally chose one
+ * of several cases. Gives the grader each case's OWN marking scheme; it identifies
+ * which case the transcript covers and marks against THAT case's criteria + total
+ * (never a generic /10).
+ */
+export function buildExamMarksFeedbackPrompt(transcript = [], cases = []) {
+  const convo = (Array.isArray(transcript) ? transcript : [])
+    .map((t) => `${t.role === 'examiner' ? 'EXAMINER' : 'CANDIDATE'}: ${t.text}`)
+    .join('\n')
+  const blocks = cases
+    .map((raw, i) => {
+      const c = normalizeQuestion(raw)
+      const crit = (c.markingCriteria || []).slice(0, 16).map((x, j) => `     ${j + 1}. ${x}`).join('\n')
+      return `CASE ${i + 1}: "${c.title}" — TOTAL MARKS ${c.totalMarks}, PASS MARK ${c.passMark != null ? c.passMark : Math.ceil(c.totalMarks / 2)}
+   Scenario: ${String(c.scenario || '').replace(/\s+/g, ' ').slice(0, 200)}
+   Marking criteria (1 mark each):\n${crit || '     (judge holistically)'}${c.killerMarks ? `\n   Killer/unsafe (auto-fail): ${c.killerMarks}` : ''}`
+    })
+    .join('\n\n')
+
+  return `You are a senior medical examiner marking an oral exam from its transcript. The candidate chose ONE of the cases below. FIRST identify which case the transcript is about (match the scenario), THEN mark the candidate STRICTLY against THAT case's own marking criteria and total — NEVER out of 10.
+
+CASES AND THEIR MARKING SCHEMES:
+${blocks || '(no cases)'}
+
+Return ONLY a JSON object with EXACTLY these keys:
+{
+  "candidate_name": "",
+  "matched_case": "",
+  "marks_awarded": 0,
+  "total_marks": 0,
+  "pass_mark": 0,
+  "killer_failed": false,
+  "clinical_reasoning": 0,
+  "diagnosis": 0,
+  "management": 0,
+  "communication": 0,
+  "strengths": [],
+  "weaknesses": [],
+  "missed_items": [],
+  "unsafe_areas": [],
+  "recommendations": [],
+  "examiner_comments": ""
+}
+- "matched_case": the title of the case you marked against.
+- "total_marks" / "pass_mark": copy from the matched case (NOT 10).
+- "marks_awarded": 0..total_marks, one mark per criterion the candidate actually covered.
+- clinical_reasoning/diagnosis/management/communication: 0-10 (supplementary only).
+- "missed_items": criteria the candidate did NOT cover. "examiner_comments": 120-220 word narrative.
+
+TRANSCRIPT:
+${convo || '(no transcript captured)'}`
+}
+
 // Generic grader system prompt used for feedback when no single case is known
 // (e.g. an adaptive training session that ran a candidate-chosen case).
 export function buildGraderSystem() {

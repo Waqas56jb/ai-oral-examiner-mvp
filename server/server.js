@@ -10,6 +10,7 @@ import {
   buildGraderSystem,
   buildFeedbackUserPrompt,
   buildMarksFeedbackPrompt,
+  buildExamMarksFeedbackPrompt,
   buildExamSessionInstructions,
   normalizeQuestion,
 } from './prompts/examiner.js'
@@ -395,9 +396,21 @@ app.post('/api/feedback', async (req, res) => {
     const rawCase = questionId || formId ? await resolveCase({ formId, questionId, examType }) : null
     const question = normalizeQuestion(rawCase)
 
-    // Single-case sessions grade against the case's OWN marking scheme (#6);
-    // adaptive sessions (no specific case) grade qualitatively from the transcript.
-    const userPrompt = rawCase ? buildMarksFeedbackPrompt(transcript, question) : buildFeedbackUserPrompt(transcript)
+    // Grading strategy (always against the case's OWN marking scheme — never /10):
+    //  1) Single case (formId/questionId) → mark against that case.
+    //  2) Exam session (examType is an exam) → mark against whichever of the
+    //     exam's cases the candidate chose (grader identifies it).
+    //  3) Otherwise → qualitative.
+    let userPrompt
+    let examCases = null
+    if (rawCase) {
+      userPrompt = buildMarksFeedbackPrompt(transcript, question)
+    } else if (examType && (examCases = await getExamCases(examType)).length) {
+      userPrompt = buildExamMarksFeedbackPrompt(transcript, examCases)
+    } else {
+      examCases = null
+      userPrompt = buildFeedbackUserPrompt(transcript)
+    }
 
     const completion = await chatCreate({
       model: await activeChatModel(),
@@ -474,11 +487,14 @@ function buildReport(data, caseObj = null) {
   const co = s(data.communication)
 
   // ---- Marks-based result (#6) ----
+  // Use marks mode when we have a case OR the grader returned a marks total
+  // (exam sessions return the matched case's total). Never a generic /10.
+  const marksMode = Boolean(caseObj) || Number(data.total_marks) > 0
   let overall, scorePct, passFail, marksAwarded = null, totalMarks = null, passMark = null, killerFailed = false
-  if (caseObj) {
-    totalMarks = Number(data.total_marks) > 0 ? Number(data.total_marks) : (Number(caseObj.totalMarks) || 10)
+  if (marksMode) {
+    totalMarks = Number(data.total_marks) > 0 ? Number(data.total_marks) : (Number(caseObj?.totalMarks) || 10)
     passMark = data.pass_mark != null ? Number(data.pass_mark)
-      : (caseObj.passMark != null ? Number(caseObj.passMark) : Math.ceil(totalMarks / 2))
+      : (caseObj?.passMark != null ? Number(caseObj.passMark) : Math.ceil(totalMarks / 2))
     marksAwarded = clampInt(data.marks_awarded, 0, totalMarks, 0)
     killerFailed = Boolean(data.killer_failed)
     scorePct = totalMarks > 0 ? Math.round((marksAwarded / totalMarks) * 100) : 0
@@ -612,27 +628,29 @@ app.post('/api/admin/jotform/import', requireAdmin, async (req, res) => {
           failed++
           continue
         }
+        // Marking comes from the case's OWN scheme (real total, not /10).
+        const total = Number(c.total_marks) > 0 ? Number(c.total_marks) : (c.questions?.length || 1)
         const row = {
           exam_type: deriveExamType(c.category, c.title),
           external_ref: id,
           title: c.title,
           stem: c.scenario,
-          marking_criteria: c.questions,
+          marking_criteria: Array.isArray(c.marking_criteria) && c.marking_criteria.length ? c.marking_criteria : c.questions,
+          model_answer: (c.modelAnswers || []).join('\n\n') || null,
+          examiner_instructions: c.questions?.length
+            ? 'Work through these questions in order, probing the candidate:\n' + c.questions.map((q, i) => `${i + 1}. ${q}`).join('\n')
+            : null,
+          total_marks: total,
+          pass_mark: c.pass_mark != null ? c.pass_mark : Math.max(1, Math.round(total * 0.5)),
           is_active: true,
         }
         const existing = await supabase.from('exam_questions').select('id').eq('external_ref', id).maybeSingle()
         if (existing.data?.id) {
-          await supabase.from('exam_questions').update(row).eq('id', existing.data.id)
-          await supabase.from('exam_questions').update({ model_answer: c.modelAnswers.join('\n\n') }).eq('id', existing.data.id)
-          updated++
+          const { error } = await supabase.from('exam_questions').update(row).eq('id', existing.data.id)
+          error ? failed++ : updated++
         } else {
           const ins = await supabase.from('exam_questions').insert(row).select('id').single()
-          if (ins.error) {
-            failed++
-          } else {
-            await supabase.from('exam_questions').update({ model_answer: c.modelAnswers.join('\n\n') }).eq('id', ins.data.id)
-            imported++
-          }
+          ins.error ? failed++ : imported++
         }
       } catch {
         failed++

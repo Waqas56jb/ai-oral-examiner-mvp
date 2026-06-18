@@ -210,13 +210,18 @@ export async function getExamProfile(examKey) {
 // All ACTIVE cases that belong to an exam (matched by alias), numbered. Prefers
 // the curated training set when some of the exam's cases are trained, else uses
 // all the exam's active cases.
-export async function getExamCases(examKey, max = 30) {
+// DETERMINISTIC: sorted by id and capped, so the exam-session menu and the
+// feedback grader see the SAME set of cases (the grader marks against whichever
+// one the candidate chose). Prefers the curated training set if any are trained.
+export async function getExamCases(examKey, max = 8) {
   if (!supabase || !examKey) return []
   const sel = 'id, title, exam_type, pathway, stem, marking_criteria, patient_script, model_answer, red_flags, killer_marks, total_marks, pass_mark, duration_seconds, in_training'
   const rows = await fetchAll('exam_questions', sel, (q) => q.eq('is_active', true))
   const all = rows.filter((c) => caseMatchesExam(c, examKey))
   const trained = all.filter((c) => c.in_training)
-  return (trained.length ? trained : all).slice(0, max)
+  const pool = trained.length ? trained : all
+  pool.sort((a, b) => String(a.id).localeCompare(String(b.id)))
+  return pool.slice(0, max)
 }
 
 // Count of cases currently in the training set.

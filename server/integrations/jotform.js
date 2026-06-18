@@ -104,9 +104,39 @@ const stripHtml = (h) =>
 const isQ = (t) => /^q\s*\d/i.test(t)
 
 /**
+ * Extract the case's MARKING SCHEME from its content — the actual criteria on
+ * the Jotform, NOT a generic /10.
+ *  - SAQ/OSCE: each "Correct possible answers:" bullet point = 1 mark.
+ *  - MCQ: the "(Score: N)" annotations sum to the total.
+ * Returns { criteria: string[], totalMarks: number }.
+ */
+function extractMarkingScheme(answerTexts, allTexts) {
+  const criteria = []
+  for (const t of answerTexts) {
+    const idx = t.search(/correct\s+possible\s+answers?\s*:/i)
+    if (idx < 0) continue
+    const body = t.slice(idx).replace(/correct\s+possible\s+answers?\s*:/i, '')
+    body
+      .split(/\s[-•–]\s+/) // bullet separators
+      .map((s) => s.trim().replace(/^[-•–]\s*/, '').replace(/[.;,\s]+$/, '').trim())
+      .filter((s) => s.length > 3)
+      .forEach((p) => criteria.push(p.length > 180 ? p.slice(0, 180) + '…' : p))
+  }
+  // MCQ-style "(Score: N)"
+  let mcq = 0
+  for (const t of allTexts) {
+    const m = String(t).match(/\(\s*score\s*:\s*(\d+)\s*\)/gi)
+    if (m) m.forEach((x) => (mcq += Number((x.match(/\d+/) || [0])[0])))
+  }
+  const totalMarks = criteria.length || mcq || 0
+  return { criteria, totalMarks }
+}
+
+/**
  * Parse a PassGP clinical case form into:
- *  { formId, title, category, scenario, questions[], modelAnswers[], hints }
- * The "model answers" / hints are examiner-only marking material.
+ *  { formId, title, category, scenario, questions[], modelAnswers[], hints,
+ *    marking_criteria[], total_marks, pass_mark }
+ * marking_criteria + total_marks come from the case's OWN scheme (not /10).
  */
 export async function parseClinicalCase(formId, knownTitle) {
   const [title, questions] = await Promise.all([
@@ -130,7 +160,18 @@ export async function parseClinicalCase(formId, knownTitle) {
   const hints = texts.find((t) => /^hints and tips/i.test(t.text))?.text || ''
   const category = (texts.find((t) => /^category:/i.test(t.text))?.text || '').replace(/^category:\s*/i, '')
 
-  return { formId, title, category, scenario, questions: questionsList, modelAnswers, hints }
+  // Marking scheme from the case's own criteria (real total, not /10).
+  const { criteria, totalMarks } = extractMarkingScheme(after.map((t) => t.text), texts.map((t) => t.text))
+  const total = totalMarks > 0 ? totalMarks : questionsList.length // fallback: 1 mark/question
+  const passMark = total > 0 ? Math.max(1, Math.round(total * 0.5)) : null // 50% default
+
+  return {
+    formId, title, category, scenario,
+    questions: questionsList, modelAnswers, hints,
+    marking_criteria: criteria,
+    total_marks: total,
+    pass_mark: passMark,
+  }
 }
 
 /* --------------------------------- WRITE --------------------------------- */

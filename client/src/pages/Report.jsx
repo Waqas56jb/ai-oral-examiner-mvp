@@ -212,12 +212,17 @@ export default function Report() {
         <div className="rp-stats">
           <Stat icon="⏱" label="Duration" value={timeStr} />
           {marksAwarded != null && totalMarks ? (
-            <Stat icon="✓" label="Marks" value={`${marksAwarded}/${totalMarks}`} />
+            <>
+              <Stat icon="✓" label="Marks awarded" value={`${marksAwarded} / ${totalMarks}`} />
+              <Stat icon="🎯" label="Score" value={`${score}%`} />
+            </>
           ) : (
-            <Stat icon="❓" label="Questions" value={questionsAnswered} />
+            <>
+              <Stat icon="❓" label="Questions" value={questionsAnswered} />
+              <Stat icon="💬" label="Words spoken" value={wordCount} />
+            </>
           )}
-          <Stat icon="💬" label="Words spoken" value={wordCount} />
-          <Stat icon="🎯" label="Overall" value={`${overall}/10`} />
+          <Stat icon="🏁" label="Outcome" value={passFail || result} />
         </div>
 
         {/* Mock circuit summary (#10) */}
@@ -245,9 +250,9 @@ export default function Report() {
         {/* Charts row */}
         <div className="rp-charts">
           <div className="rp-chart-card rp-chart-gauge">
-            <h3 className="rp-card-title">Overall score</h3>
+            <h3 className="rp-card-title">{marksAwarded != null && totalMarks ? `Marks: ${marksAwarded} / ${totalMarks}` : 'Overall score'}</h3>
             <ScoreGauge score={score} />
-            <p className="rp-gauge-cap">Weighted across five competency domains</p>
+            <p className="rp-gauge-cap">{marksAwarded != null && totalMarks ? '% of marks achieved against this case’s criteria' : 'Weighted across competency domains'}</p>
           </div>
           <div className="rp-chart-card">
             <h3 className="rp-card-title">Competency profile</h3>
