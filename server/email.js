@@ -91,20 +91,25 @@ function buildHtml({ candidateName, examType, report, date }) {
  * Send a session-summary email with a PDF report attached. Never throws.
  * Returns { sent: boolean, reason?: string }.
  */
-export async function sendSessionSummary({ candidateEmail, candidateName, examType, report, date }) {
+export async function sendSessionSummary({ candidateEmail, candidateName, examType, report, date, pdfBuffer }) {
   try {
     const transport = getTransport()
     if (!transport) return { sent: false, reason: 'not configured' }
     if (!candidateEmail) return { sent: false, reason: 'no recipient' }
 
     const when = date || new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
+    const safeName = String(candidateName || 'candidate').replace(/[^a-z0-9]+/gi, '-').slice(0, 40)
     let attachments = []
-    try {
-      const pdf = await buildReportPdf({ candidateName, examType, date: when, report })
-      const safeName = String(candidateName || 'candidate').replace(/[^a-z0-9]+/gi, '-').slice(0, 40)
-      attachments = [{ filename: `PassGP-Report-${safeName}.pdf`, content: Buffer.from(pdf), contentType: 'application/pdf' }]
-    } catch (e) {
-      console.warn('PDF build failed, sending email without attachment:', e?.message)
+    if (pdfBuffer && pdfBuffer.length) {
+      // Use the exact on-screen report PDF (with charts) supplied by the client.
+      attachments = [{ filename: `PassGP-Report-${safeName}.pdf`, content: pdfBuffer, contentType: 'application/pdf' }]
+    } else {
+      try {
+        const pdf = await buildReportPdf({ candidateName, examType, date: when, report })
+        attachments = [{ filename: `PassGP-Report-${safeName}.pdf`, content: Buffer.from(pdf), contentType: 'application/pdf' }]
+      } catch (e) {
+        console.warn('PDF build failed, sending email without attachment:', e?.message)
+      }
     }
 
     const outcome = report?.pass_fail || report?.result || ''

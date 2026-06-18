@@ -95,7 +95,8 @@ async function chatCreate(params, options) {
 }
 
 const app = express()
-app.use(express.json({ limit: '1mb' }))
+// Larger limit so the client can POST the rendered report PDF (base64) to email.
+app.use(express.json({ limit: '15mb' }))
 // Our own Vercel deployments (admin / chatbot / backend) — old, new and preview
 // aliases all share this prefix. Matching the pattern avoids "Load failed" when
 // a deployment URL changes.
@@ -145,6 +146,25 @@ app.get('/api/exam-profiles', async (_req, res) => {
     res.json({ exams })
   } catch {
     res.json({ exams: [] })
+  }
+})
+
+// Public: email the candidate the EXACT on-screen report (with charts) that the
+// client rendered to PDF. Body: { candidateEmail, candidateName, examType, pdfBase64, report }.
+app.post('/api/email-report', async (req, res) => {
+  try {
+    const { candidateEmail, candidateName = '', examType = '', pdfBase64 = '', report = {} } = req.body || {}
+    if (!candidateEmail) return res.json({ sent: false, reason: 'no recipient' })
+    let pdfBuffer = null
+    if (pdfBase64) {
+      const b64 = String(pdfBase64).replace(/^data:application\/pdf(;[^,]*)?,/, '')
+      pdfBuffer = Buffer.from(b64, 'base64')
+    }
+    const result = await sendSessionSummary({ candidateEmail, candidateName, examType, report, pdfBuffer })
+    res.json(result)
+  } catch (e) {
+    console.error('email-report error:', e?.message)
+    res.json({ sent: false, reason: e?.message || 'error' })
   }
 })
 
@@ -432,15 +452,8 @@ app.post('/api/feedback', async (req, res) => {
       })
       sessionId = saved?.id || null
 
-      // Fire-and-forget: email the candidate (and optionally admin) their summary (#14).
-      if (candidateEmail && candidateEmail.trim()) {
-        sendSessionSummary({
-          candidateEmail: candidateEmail.trim(),
-          candidateName: (candidateName && candidateName.trim()) || report.candidate_name || '',
-          examType: (rawCase ? question.examType : examType) || 'Clinical case',
-          report,
-        }).catch(() => {})
-      }
+      // NOTE: the candidate's emailed report is sent from the client report page
+      // (POST /api/email-report) so it includes the exact on-screen charts/graphs.
     }
 
     res.json({ ...report, sessionId })

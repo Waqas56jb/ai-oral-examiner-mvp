@@ -421,3 +421,9 @@
   background: #fee2e2; border: 1px solid #fca5a5; color: #b91c1c;
   font-weight: 700; font-size: 0.92rem;
 }
+
+/* Auto-email status in the report toolbar */
+.rp-email-status { display: inline-flex; align-items: center; gap: 7px; font-size: 0.85rem; font-weight: 600; margin-right: 4px; }
+.rp-email-status[data-state="sending"] { color: #6366f1; }
+.rp-email-status[data-state="sent"] { color: #16a34a; }
+.rp-email-status[data-state="error"] { color: #d97706; }

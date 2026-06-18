@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { jsPDF } from 'jspdf'
 import html2canvas from 'html2canvas'
 import { useExam } from '../context/ExamContext'
+import { apiUrl } from '../services/config'
 import { ScoreGauge, RadarChart, DomainBars } from '../components/charts/Charts'
 import './Report.css'
 
@@ -32,6 +33,7 @@ export default function Report() {
     questionTitle = 'Clinical case',
     examType = 'RACGP',
     candidateName = '',
+    candidateEmail = '',
     pathway = '',
     isMock = false,
     stations = [],
@@ -62,32 +64,40 @@ export default function Report() {
   const rl = result.toLowerCase()
   const resultClass = rl.includes('excellent') || rl.includes('competent') ? 'pass' : rl.includes('needs') || rl.includes('below') ? 'fail' : 'merit'
 
+  // Render the on-screen report (incl. charts) to a jsPDF doc. Shared by the
+  // download button and the auto-email, so the emailed PDF is identical.
+  async function buildPdf(quality = 'png') {
+    const canvas = await html2canvas(reportRef.current, {
+      scale: quality === 'jpeg' ? 1.6 : 2,
+      backgroundColor: '#ffffff',
+      useCORS: true,
+      logging: false,
+    })
+    const fmt = quality === 'jpeg' ? 'JPEG' : 'PNG'
+    const img = canvas.toDataURL(quality === 'jpeg' ? 'image/jpeg' : 'image/png', 0.85)
+    const pdf = new jsPDF('p', 'mm', 'a4')
+    const pageW = pdf.internal.pageSize.getWidth()
+    const pageH = pdf.internal.pageSize.getHeight()
+    const imgH = (canvas.height * pageW) / canvas.width
+    let heightLeft = imgH
+    let position = 0
+    pdf.addImage(img, fmt, 0, position, pageW, imgH)
+    heightLeft -= pageH
+    while (heightLeft > 0) {
+      position -= pageH
+      pdf.addPage()
+      pdf.addImage(img, fmt, 0, position, pageW, imgH)
+      heightLeft -= pageH
+    }
+    return pdf
+  }
+
   async function downloadPDF() {
     if (!reportRef.current) return
     setExporting(true)
     try {
-      const canvas = await html2canvas(reportRef.current, {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        logging: false,
-      })
-      const img = canvas.toDataURL('image/png')
-      const pdf = new jsPDF('p', 'mm', 'a4')
-      const pageW = pdf.internal.pageSize.getWidth()
-      const pageH = pdf.internal.pageSize.getHeight()
-      const imgH = (canvas.height * pageW) / canvas.width
-      let heightLeft = imgH
-      let position = 0
-      pdf.addImage(img, 'PNG', 0, position, pageW, imgH)
-      heightLeft -= pageH
-      while (heightLeft > 0) {
-        position -= pageH
-        pdf.addPage()
-        pdf.addImage(img, 'PNG', 0, position, pageW, imgH)
-        heightLeft -= pageH
-      }
-      pdf.save(`PassGP-Report-${Date.now()}.pdf`)
+      const pdf = await buildPdf('png')
+      pdf.save(`PassGP-Report-${candidateName ? candidateName.replace(/[^a-z0-9]+/gi, '-') : Date.now()}.pdf`)
     } catch (e) {
       // eslint-disable-next-line no-alert
       alert('Could not generate the PDF. Please try again.')
@@ -97,6 +107,37 @@ export default function Report() {
     }
   }
 
+  // Auto-email this exact report (with charts) to the candidate, once, after the
+  // charts have rendered.
+  const [emailState, setEmailState] = useState('idle') // idle | sending | sent | error
+  useEffect(() => {
+    if (!candidateEmail || !reportRef.current) return
+    let cancelled = false
+    const t = setTimeout(async () => {
+      try {
+        setEmailState('sending')
+        const pdf = await buildPdf('jpeg') // smaller for email
+        const dataUri = pdf.output('datauristring') // data:application/pdf;base64,...
+        if (cancelled) return
+        const res = await fetch(apiUrl('/api/email-report'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            candidateEmail, candidateName,
+            examType: pathway || examType,
+            pdfBase64: dataUri,
+            report: { ...fb, examiner_comments: detailed, pass_fail: passFail },
+          }),
+        })
+        const d = await res.json().catch(() => ({}))
+        if (!cancelled) setEmailState(d?.sent ? 'sent' : 'error')
+      } catch {
+        if (!cancelled) setEmailState('error')
+      }
+    }, 2000) // let recharts finish animating before capture
+    return () => { cancelled = true; clearTimeout(t) }
+  }, []) // eslint-disable-line
+
   return (
     <div className="rp-page">
       {/* Toolbar (not captured in the PDF) */}
@@ -104,6 +145,13 @@ export default function Report() {
         <button className="rp-tbtn rp-tbtn-ghost" onClick={() => { clearSession(); navigate('/exam') }}>
           ← New session
         </button>
+        {candidateEmail && (
+          <span className="rp-email-status" data-state={emailState}>
+            {emailState === 'sending' && <><span className="rp-spin" /> Emailing report…</>}
+            {emailState === 'sent' && <>✓ Report emailed to {candidateEmail}</>}
+            {emailState === 'error' && <>Couldn’t email — please download below</>}
+          </span>
+        )}
         <button className="rp-tbtn rp-tbtn-primary" onClick={downloadPDF} disabled={exporting}>
           {exporting ? (
             <>
