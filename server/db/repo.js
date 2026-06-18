@@ -121,30 +121,70 @@ export async function getCircuit({ count = 3, pathway = '', examType = '' } = {}
 
 /* ---- Exam profiles (per-exam examiner personality) ---- */
 
-// An "exam" is identified by a case's pathway, or its exam_type when no pathway.
-const examKeyOf = (q) => (q.pathway && q.pathway.trim()) || (q.exam_type && q.exam_type.trim()) || ''
+// Canonical exams and the case tags (exam_type / pathway values) that belong to
+// each. Lets short tags in the data (ACRRM, AMC, RACGP, CCE) line up with one
+// canonical profile (StAMPS (ACRRM), AMC Clinical, RACGP CCE…) — no duplicates.
+const _norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '')
+const EXAM_ALIASES = {
+  'RACGP CCE': ['racgpcce', 'racgp', 'cce'],
+  'StAMPS (ACRRM)': ['stampsacrrm', 'stamps', 'acrrm', 'staamps'],
+  'AMC Clinical': ['amcclinical', 'amc'],
+  'PESCI': ['pesci'],
+  'KFP': ['kfp'],
+  'AKT': ['akt'],
+}
+// Aliases for a profile key (falls back to the key itself for custom exams).
+function aliasesFor(examKey) {
+  if (EXAM_ALIASES[examKey]) return EXAM_ALIASES[examKey]
+  // also match if a custom key happens to be an alias of a canonical exam
+  const n = _norm(examKey)
+  for (const list of Object.values(EXAM_ALIASES)) if (list.includes(n)) return list
+  return [n]
+}
+// Does a case (its exam_type / pathway) belong to this exam?
+function caseMatchesExam(c, examKey) {
+  const aliases = aliasesFor(examKey)
+  const fields = [_norm(c.pathway), _norm(c.exam_type)]
+  return fields.some((f) => f && aliases.includes(f))
+}
 
-// Exams a candidate can choose: distinct exam identifiers among trained cases,
-// joined with their (optional) profile. Only enabled exams with ≥1 case.
+// Fetch ALL rows of a select, paginating past Supabase's 1000-row cap.
+async function fetchAll(table, columns, applyFilters) {
+  let all = []
+  let from = 0
+  while (true) {
+    let q = supabase.from(table).select(columns).range(from, from + 999)
+    if (applyFilters) q = applyFilters(q)
+    const { data, error } = await q
+    if (error) break
+    all = all.concat(data || [])
+    if (!data || data.length < 1000) break
+    from += 1000
+  }
+  return all
+}
+
+// Count of ACTIVE cases assigned to an exam (the assignable pool).
+async function countCasesByExam(profiles) {
+  const cases = await fetchAll('exam_questions', 'exam_type, pathway', (q) => q.eq('is_active', true))
+  return profiles.map((p) => ({ ...p, caseCount: cases.filter((c) => caseMatchesExam(c, p.exam_key)).length }))
+}
+
+// Exams a candidate can choose: enabled profiles that have ≥1 active case.
 export async function getCandidateExams() {
   if (!supabase) return []
-  const { data } = await supabase
-    .from('exam_questions')
-    .select('exam_type, pathway')
-    .eq('is_active', true)
-    .eq('in_training', true)
-    .limit(5000)
-  const counts = new Map()
-  for (const r of data || []) {
-    const k = examKeyOf(r)
-    if (k) counts.set(k, (counts.get(k) || 0) + 1)
-  }
-  const { data: profs } = await supabase.from('exam_profiles').select('exam_key, label, enabled')
-  const pmap = new Map((profs || []).map((p) => [p.exam_key, p]))
-  return [...counts.entries()]
-    .map(([key, count]) => ({ exam_key: key, label: pmap.get(key)?.label || key, caseCount: count, enabled: pmap.get(key)?.enabled ?? true }))
-    .filter((e) => e.enabled)
-    .sort((a, b) => a.label.localeCompare(b.label))
+  const { data: profs } = await supabase.from('exam_profiles').select('exam_key, label, enabled').eq('enabled', true).order('sort')
+  const withCounts = await countCasesByExam(profs || [])
+  return withCounts
+    .filter((e) => e.caseCount > 0)
+    .map((e) => ({ exam_key: e.exam_key, label: e.label || e.exam_key, caseCount: e.caseCount, enabled: true }))
+}
+
+// All exam profiles with their case counts (for the admin Exam Profiles page).
+export async function getExamProfilesWithCounts() {
+  if (!supabase) return []
+  const { data: profs } = await supabase.from('exam_profiles').select('*').order('sort')
+  return countCasesByExam(profs || [])
 }
 
 export async function getExamProfile(examKey) {
@@ -153,24 +193,16 @@ export async function getExamProfile(examKey) {
   return data || null
 }
 
-// All trained cases for an exam (matched by pathway OR exam_type), numbered.
+// All ACTIVE cases that belong to an exam (matched by alias), numbered. Prefers
+// the curated training set when some of the exam's cases are trained, else uses
+// all the exam's active cases.
 export async function getExamCases(examKey, max = 30) {
   if (!supabase || !examKey) return []
-  const sel = 'id, title, exam_type, pathway, stem, marking_criteria, patient_script, model_answer, red_flags, killer_marks, total_marks, pass_mark, duration_seconds'
-  const base = () => supabase.from('exam_questions').select(sel).eq('is_active', true).eq('in_training', true)
-  const [byPath, byType] = await Promise.all([
-    base().eq('pathway', examKey).limit(max),
-    base().eq('exam_type', examKey).limit(max),
-  ])
-  const seen = new Set()
-  const out = []
-  for (const row of [...(byPath.data || []), ...(byType.data || [])]) {
-    if (seen.has(row.id)) continue
-    seen.add(row.id)
-    out.push(row)
-    if (out.length >= max) break
-  }
-  return out
+  const sel = 'id, title, exam_type, pathway, stem, marking_criteria, patient_script, model_answer, red_flags, killer_marks, total_marks, pass_mark, duration_seconds, in_training'
+  const rows = await fetchAll('exam_questions', sel, (q) => q.eq('is_active', true))
+  const all = rows.filter((c) => caseMatchesExam(c, examKey))
+  const trained = all.filter((c) => c.in_training)
+  return (trained.length ? trained : all).slice(0, max)
 }
 
 // Count of cases currently in the training set.

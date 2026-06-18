@@ -15,7 +15,7 @@ import {
 } from './prompts/examiner.js'
 import {
   getRandomQuestion, getQuestionById, getTrainingPool, getCircuit, saveSession,
-  getCandidateExams, getExamProfile, getExamCases,
+  getCandidateExams, getExamProfile, getExamProfilesWithCounts, getExamCases,
 } from './db/repo.js'
 import { sendSessionSummary } from './email.js'
 import { parseClinicalCase, jotformReady, listCaseForms, deriveExamType } from './integrations/jotform.js'
@@ -653,29 +653,18 @@ app.get('/api/admin/questions', requireAdmin, async (_req, res) => {
   }
 })
 
-// Admin: list exam profiles merged with the exams that actually have cases.
+// Admin: list exam profiles with their (active) case counts.
 app.get('/api/admin/exam-profiles', requireAdmin, async (_req, res) => {
   try {
-    const exams = await getCandidateExams() // [{exam_key,label,caseCount}] (enabled only)
-    const { data: profs } = await supabase.from('exam_profiles').select('*').order('sort')
-    const pmap = new Map((profs || []).map((p) => [p.exam_key, p]))
-    // also include exams present in data that have no profile yet
-    const counts = new Map(exams.map((e) => [e.exam_key, e.caseCount]))
-    // and exams that have a profile but maybe 0 trained cases
-    const keys = new Set([...(profs || []).map((p) => p.exam_key), ...exams.map((e) => e.exam_key)])
-    const rows = [...keys].map((key) => {
-      const p = pmap.get(key) || {}
-      return {
-        exam_key: key,
-        label: p.label || key,
-        examiner_instructions: p.examiner_instructions || '',
-        mode: p.mode || 'both',
-        enabled: p.enabled ?? true,
-        caseCount: counts.get(key) || 0,
-        hasProfile: pmap.has(key),
-      }
-    }).sort((a, b) => a.label.localeCompare(b.label))
-    res.json({ profiles: rows })
+    const rows = await getExamProfilesWithCounts()
+    res.json({ profiles: rows.map((p) => ({
+      exam_key: p.exam_key,
+      label: p.label || p.exam_key,
+      examiner_instructions: p.examiner_instructions || '',
+      mode: p.mode || 'both',
+      enabled: p.enabled ?? true,
+      caseCount: p.caseCount || 0,
+    })) })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
