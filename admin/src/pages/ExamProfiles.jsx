@@ -32,6 +32,8 @@ export default function ExamProfiles() {
       await apiPut(`/api/admin/exam-profiles/${encodeURIComponent(editing.exam_key)}`, {
         label: editing.label,
         examiner_instructions: editing.examiner_instructions,
+        mark_scheme: editing.mark_scheme,
+        standard: editing.standard,
         mode: editing.mode,
         enabled: editing.enabled,
       })
@@ -113,12 +115,35 @@ export default function ExamProfiles() {
           <Field label="Examiner personality / how to run this exam">
             <textarea
               className="textarea"
-              style={{ minHeight: 170 }}
+              style={{ minHeight: 130 }}
               value={editing.examiner_instructions}
               onChange={(e) => setEditing((s) => ({ ...s, examiner_instructions: e.target.value }))}
               placeholder={'e.g. For the CCE patient exam, play a patient who is anxious and talkative. As a StAMPS examiner, focus hard on emergencies and rural safety…'}
             />
           </Field>
+
+          <Field label="What mark scheme am I using?">
+            <textarea
+              className="textarea"
+              style={{ minHeight: 110 }}
+              value={editing.mark_scheme || ''}
+              onChange={(e) => setEditing((s) => ({ ...s, mark_scheme: e.target.value }))}
+              placeholder={'e.g. Each case is marked against its criteria. 8 stations, each scored independently. A pass needs a satisfactory rating in safety and management across the circuit.'}
+            />
+          </Field>
+
+          <Field label="What is the standard for this exam, and how would a good candidate answer?">
+            <textarea
+              className="textarea"
+              style={{ minHeight: 130 }}
+              value={editing.standard || ''}
+              onChange={(e) => setEditing((s) => ({ ...s, standard: e.target.value }))}
+              placeholder={'e.g. A good StAMPS candidate works safely with limited resources, escalates/retrieves appropriately, gives specific drug doses, and communicates a clear plan. Pass = covers the critical safety steps and the core management; fail = misses a killer step or is unsafe.'}
+            />
+          </Field>
+          <p className="muted" style={{ fontSize: '0.82rem', marginTop: -4 }}>
+            These train both the live examiner (what to probe for) and the grader (how to decide pass/fail) for every {editing.label} session.
+          </p>
 
           <label className="auth-check" style={{ marginTop: 4 }}>
             <input type="checkbox" checked={editing.enabled} onChange={(e) => setEditing((s) => ({ ...s, enabled: e.target.checked }))} /> Available for candidates to choose

@@ -396,7 +396,7 @@ export function buildExamSessionInstructions({ exam, profile, cases = [], candid
   const system = `
 You are the PassGP AI Oral Examiner for the ${profile?.label || exam} exam.
 
-${personality ? `# THIS EXAM'S EXAMINER PERSONALITY (set by PassGP — follow it closely):\n${personality}\n` : ''}${roleSectionFor(mode)}${examFormatNote(exam, exam)}
+${personality ? `# THIS EXAM'S EXAMINER PERSONALITY (set by PassGP — follow it closely):\n${personality}\n` : ''}${roleSectionFor(mode)}${examFormatNote(exam, exam)}${profile?.standard ? `\n\n# EXAM STANDARD (what a GOOD candidate does for this exam — probe to this level):\n${profile.standard}` : ''}${profile?.mark_scheme ? `\n\n# MARK SCHEME for this exam (how it is marked):\n${profile.mark_scheme}` : ''}
 
 # OPENING (do this once)
 - Greet the candidate${candidateName ? ` (${candidateName})` : ''} warmly and confirm this is the ${profile?.label || exam} exam.
@@ -431,10 +431,14 @@ ${aiConfig.examinerInstructions ? `\n# ADMIN DIRECTIVES (take priority):\n${aiCo
  * which case the transcript covers and marks against THAT case's criteria + total
  * (never a generic /10).
  */
-export function buildExamMarksFeedbackPrompt(transcript = [], cases = []) {
+export function buildExamMarksFeedbackPrompt(transcript = [], cases = [], profile = null) {
   const convo = (Array.isArray(transcript) ? transcript : [])
     .map((t) => `${t.role === 'examiner' ? 'EXAMINER' : 'CANDIDATE'}: ${t.text}`)
     .join('\n')
+  const standardBlock = [
+    profile?.mark_scheme && `MARK SCHEME for this exam (apply it): ${profile.mark_scheme}`,
+    profile?.standard && `STANDARD — what a good candidate does / the pass bar for this exam: ${profile.standard}`,
+  ].filter(Boolean).join('\n')
   const blocks = cases
     .map((raw, i) => {
       const c = normalizeQuestion(raw)
@@ -446,7 +450,7 @@ export function buildExamMarksFeedbackPrompt(transcript = [], cases = []) {
     .join('\n\n')
 
   return `You are a senior medical examiner marking an oral exam from its transcript. The candidate chose ONE of the cases below. FIRST identify which case the transcript is about (match the scenario), THEN mark the candidate STRICTLY against THAT case's own marking criteria and total — NEVER out of 10.
-
+${standardBlock ? `\n# THIS EXAM'S MARKING STANDARD (set by PassGP — use this to decide pass/fail and how to award marks):\n${standardBlock}\n` : ''}
 CASES AND THEIR MARKING SCHEMES:
 ${blocks || '(no cases)'}
 

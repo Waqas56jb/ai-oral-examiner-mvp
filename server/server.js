@@ -406,7 +406,8 @@ app.post('/api/feedback', async (req, res) => {
     if (rawCase) {
       userPrompt = buildMarksFeedbackPrompt(transcript, question)
     } else if (examType && (examCases = await getExamCases(examType)).length) {
-      userPrompt = buildExamMarksFeedbackPrompt(transcript, examCases)
+      const examProfile = await getExamProfile(examType)
+      userPrompt = buildExamMarksFeedbackPrompt(transcript, examCases, examProfile)
     } else {
       examCases = null
       userPrompt = buildFeedbackUserPrompt(transcript)
@@ -692,6 +693,8 @@ app.get('/api/admin/exam-profiles', requireAdmin, async (_req, res) => {
       exam_key: p.exam_key,
       label: p.label || p.exam_key,
       examiner_instructions: p.examiner_instructions || '',
+      mark_scheme: p.mark_scheme || '',
+      standard: p.standard || '',
       mode: p.mode || 'both',
       enabled: p.enabled ?? true,
       caseCount: p.caseCount || 0,
@@ -705,11 +708,13 @@ app.get('/api/admin/exam-profiles', requireAdmin, async (_req, res) => {
 app.put('/api/admin/exam-profiles/:examKey', requireAdmin, async (req, res) => {
   try {
     const exam_key = req.params.examKey
-    const { label, examiner_instructions, mode, enabled } = req.body || {}
+    const { label, examiner_instructions, mode, enabled, mark_scheme, standard } = req.body || {}
     const payload = {
       exam_key,
       label: label ?? exam_key,
       examiner_instructions: examiner_instructions ?? '',
+      mark_scheme: mark_scheme ?? '',
+      standard: standard ?? '',
       mode: ['both', 'examiner', 'patient'].includes(mode) ? mode : 'both',
       enabled: enabled !== false,
       updated_at: new Date().toISOString(),
