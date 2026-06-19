@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>PassGP — AI Oral Examiner · Technical Documentation</title>
+<style>
+  :root{
+    --indigo:#6366f1;--violet:#8b5cf6;--ink:#0f172a;--sub:#64748b;--line:#e6e9f2;
+    --bg:#ffffff;--soft:#f6f8fd;--green:#16a34a;--amber:#d97706;--red:#dc2626;--cyan:#0891b2;
+    --get:#0891b2;--post:#16a34a;--put:#d97706;--patch:#7c3aed;--del:#dc2626;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:#fff;color:var(--ink);font:13.5px/1.65 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .page{padding:46px 54px}
+  .break{page-break-before:always}
+  h1{font-size:25px;margin:0 0 6px;letter-spacing:-.02em}
+  h2{font-size:20px;margin:30px 0 10px;padding-bottom:8px;border-bottom:2px solid var(--line);color:var(--ink);display:flex;align-items:center;gap:10px}
+  h2 .n{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:8px;background:var(--indigo);color:#fff;font-size:13px}
+  h3{font-size:15.5px;margin:18px 0 6px;color:#1e293b}
+  h4{font-size:13.5px;margin:14px 0 4px;color:#334155}
+  p{margin:7px 0;color:#334155}
+  .muted{color:var(--sub)}
+  code{background:#eef2f7;border-radius:5px;padding:1px 6px;font:12px ui-monospace,Menlo,Consolas,monospace;color:#0f172a}
+  pre{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:13px 15px;overflow:auto;font:11.5px/1.55 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-word}
+  pre .k{color:#93c5fd}.pre .s{color:#86efac}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:12.5px}
+  th,td{text-align:left;padding:8px 10px;border:1px solid var(--line);vertical-align:top}
+  th{background:var(--soft);font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--sub)}
+  ul{margin:6px 0 6px 0;padding-left:20px}li{margin:3px 0}
+  .tag{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.04em;padding:2px 8px;border-radius:6px;color:#fff;vertical-align:middle}
+  .GET{background:var(--get)}.POST{background:var(--post)}.PUT{background:var(--put)}.PATCH{background:var(--patch)}.DELETE{background:var(--del)}
+  .auth{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:#fee2e2;color:#b91c1c;margin-left:6px}
+  .auth.pub{background:#dcfce7;color:#15803d}.auth.key{background:#fef3c7;color:#b45309}
+  .ep{border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:14px 0;background:#fff;break-inside:avoid}
+  .ep .path{font:13px ui-monospace,Menlo,Consolas,monospace;font-weight:700;margin-left:8px}
+  .callout{border-left:4px solid var(--indigo);background:var(--soft);border-radius:10px;padding:12px 16px;margin:12px 0}
+  .callout.amber{border-color:var(--amber);background:#fffbeb}
+  .callout.green{border-color:var(--green);background:#f0fdf4}
+  .pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;background:#eef2ff;color:#4f46e5;margin:2px 4px 2px 0}
+  .tree{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:14px 16px;font:11.5px/1.7 ui-monospace,Menlo,Consolas,monospace;color:#1e293b;white-space:pre}
+  /* cover */
+  .cover{height:980px;background:linear-gradient(150deg,#4f46e5 0%,#6366f1 45%,#8b5cf6 100%);color:#fff;display:flex;flex-direction:column;justify-content:center;padding:0 64px;page-break-after:always}
+  .cover .tag2{font-size:13px;letter-spacing:.18em;font-weight:700;opacity:.9}
+  .cover h1{font-size:44px;line-height:1.1;margin:14px 0 8px}
+  .cover h2{border:none;font-size:20px;font-weight:500;opacity:.95;margin:0;padding:0;display:block;color:#fff}
+  .cover .meta{margin-top:40px;font-size:13px;opacity:.9;line-height:1.9}
+  .cover .badges{margin-top:26px}
+  .cover .b{display:inline-block;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:5px 14px;font-size:12px;margin:4px 6px 0 0}
+  .legendrow span{display:inline-flex;align-items:center;gap:7px;margin-right:18px;font-size:12px;color:#334155}
+  .legendrow i{width:12px;height:12px;border-radius:3px}
+  .toc a{color:#1e293b;text-decoration:none}
+  .toc li{margin:5px 0}
+  .flow{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin:8px 0}
+  .node{border-radius:11px;padding:12px 14px;color:#fff;font-weight:600;text-align:center;font-size:12.5px}
+  .arrow{font-size:20px;color:var(--sub)}
+</style>
+</head>
+<body>
+
+<!-- ===================== COVER ===================== -->
+<div class="cover">
+  <div class="tag2">PASSGP · AI ORAL EXAMINER</div>
+  <h1>Technical<br/>Documentation</h1>
+  <h2>Architecture, methodology &amp; complete backend API reference</h2>
+  <div class="badges">
+    <span class="b">React + Vite</span>
+    <span class="b">Node.js + Express</span>
+    <span class="b">Supabase (Postgres)</span>
+    <span class="b">OpenAI Realtime</span>
+    <span class="b">Jotform</span>
+    <span class="b">Vercel</span>
+  </div>
+  <div class="meta">
+    Prepared for &nbsp;<b>PassGP</b><br/>
+    Repository &nbsp;<b>github.com/Waqas56jb/ai-oral-examiner-mvp</b><br/>
+    Document &nbsp;<b>Full technical reference (v1.0)</b>
+  </div>
+</div>
+
+<!-- ===================== TOC ===================== -->
+<div class="page">
+  <h1>Contents</h1>
+  <ol class="toc" style="font-size:14px;line-height:2.1">
+    <li>Introduction &amp; purpose</li>
+    <li>Technology stack</li>
+    <li>Repository &amp; folder structure</li>
+    <li>System architecture &amp; data flow</li>
+    <li>End-to-end methodology (the exam lifecycle)</li>
+    <li>The AI examiner &amp; marking engine</li>
+    <li>Database schema</li>
+    <li>Backend API reference — every endpoint &amp; payload</li>
+    <li>Integrations (OpenAI · Supabase · Jotform · Email)</li>
+    <li>Environment variables &amp; configuration</li>
+    <li>Security model</li>
+    <li>Deployment &amp; operations</li>
+  </ol>
+</div>
+
+<!-- ===================== 1. INTRO ===================== -->
+<div class="page break">
+  <h2><span class="n">1</span> Introduction &amp; purpose</h2>
+  <p><b>PassGP AI Oral Examiner</b> is a web platform that lets medical candidates sit a realistic, spoken oral examination with an AI examiner. The candidate talks to the examiner in real time (voice), is marked against each exam's <b>own marking criteria</b> sourced from Jotform, and receives an elegantly formatted PDF report by email. Administrators (PassGP) curate the clinical case bank, define each exam's personality and marking standard, and review analytics — all from a dedicated admin console, with no code changes required for day-to-day operation.</p>
+
+  <h3>The three applications</h3>
+  <table>
+    <tr><th>App</th><th>Audience</th><th>Tech</th><th>Live URL</th></tr>
+    <tr><td><b>Chatbot</b> (<code>client/</code>)</td><td>Candidates</td><td>React + Vite</td><td><code>ai-oral-examiner-mvp-chatbot.vercel.app</code></td></tr>
+    <tr><td><b>Admin console</b> (<code>admin/</code>)</td><td>PassGP staff</td><td>React + Vite</td><td><code>ai-oral-examiner-mvp-admin.vercel.app</code></td></tr>
+    <tr><td><b>Backend API</b> (<code>server/</code>)</td><td>Both apps</td><td>Node + Express</td><td><code>ai-oral-examiner-mvp-backend.vercel.app</code></td></tr>
+  </table>
+
+  <h3>Design principles</h3>
+  <ul>
+    <li><b>Secrets stay server-side.</b> The browser apps never hold API keys; the backend mints short-lived tokens.</li>
+    <li><b>Marking follows the source.</b> Scores come from each case's Jotform criteria (real totals), never a generic /10.</li>
+    <li><b>Configurable without code.</b> Examiner behaviour, mark schemes and pass standards are edited in the admin.</li>
+    <li><b>Single source of truth.</b> One Postgres database (Supabase) backs all three apps.</li>
+  </ul>
+
+  <h2><span class="n">2</span> Technology stack</h2>
+  <table>
+    <tr><th>Layer</th><th>Technology</th><th>Why</th></tr>
+    <tr><td>Frontend (both apps)</td><td>React 18, Vite, React Router, Recharts, react-icons</td><td>Fast SPA build, charts for reports/analytics</td></tr>
+    <tr><td>Voice</td><td>OpenAI Realtime API over WebRTC</td><td>Low-latency two-way speech</td></tr>
+    <tr><td>Backend</td><td>Node.js, Express, OpenAI SDK</td><td>Thin secure API + AI orchestration</td></tr>
+    <tr><td>Database / Auth</td><td>Supabase (Postgres + Auth + RLS)</td><td>Managed DB, admin login, row-level security</td></tr>
+    <tr><td>Case source</td><td>Jotform Enterprise API</td><td>Existing clinical case bank</td></tr>
+    <tr><td>Email + PDF</td><td>nodemailer (SMTP) + pdf-lib / html2canvas + jsPDF</td><td>Report delivery</td></tr>
+    <tr><td>Hosting / CI</td><td>Vercel (3 projects, auto-deploy from GitHub <code>main</code>)</td><td>Zero-config deploys</td></tr>
+  </table>
+</div>
+
+<!-- ===================== 3. FOLDER STRUCTURE ===================== -->
+<div class="page break">
+  <h2><span class="n">3</span> Repository &amp; folder structure</h2>
+  <p>A monorepo with three independently-deployable apps. Each app has its own <code>package.json</code> and <code>.env</code>.</p>
+  <div class="tree">ai-oral-examiner-mvp/
+├─ <b>server/</b>                         Backend API (Node + Express)
+│  ├─ server.js                      All HTTP endpoints (the API surface)
+│  ├─ config.js                      Models, voice, CORS allow-list
+│  ├─ email.js                       Send report emails (nodemailer SMTP)
+│  ├─ report-pdf.js                  Fallback PDF report (pdf-lib)
+│  ├─ prompts/
+│  │  └─ examiner.js                 ★ The AI "brain": examiner + grader prompts
+│  ├─ integrations/
+│  │  └─ jotform.js                  Import & parse Jotform cases + marking
+│  ├─ db/
+│  │  ├─ supabase.js                 Server Supabase client (service key)
+│  │  ├─ repo.js                     Database queries (cases, exams, sessions)
+│  │  ├─ runSql.mjs                  CLI migration runner
+│  │  └─ migrations/                 Schema history (001 … 016)
+│  └─ .env                          Secrets (git-ignored)
+│
+├─ <b>client/</b>                         Candidate chatbot (React + Vite)
+│  ├─ src/pages/VoiceAgent.jsx       The live voice exam screen
+│  ├─ src/pages/Report.jsx           Report + auto-email (charts → PDF)
+│  ├─ src/services/realtimeClient.js WebRTC connection to OpenAI
+│  ├─ src/services/config.js         API base URL
+│  └─ public/widget.js               Kajabi embed script
+│
+├─ <b>admin/</b>                          Admin console (React + Vite)
+│  ├─ src/pages/Questions.jsx        Case bank (CRUD, CSV, import, preview)
+│  ├─ src/pages/Training.jsx         Training panel (curate + bulk assign)
+│  ├─ src/pages/ExamProfiles.jsx     Per-exam personality + mark scheme
+│  ├─ src/pages/Sessions.jsx         Review + manual override
+│  ├─ src/pages/Analytics.jsx        Charts + Power BI export
+│  ├─ src/pages/AIConfig.jsx         Voice / model / role mode / focus
+│  ├─ src/pages/Settings.jsx         Keys, email, integrations
+│  └─ src/lib/api.js                 Authenticated fetch helpers
+│
+└─ docs/                            This documentation</div>
+  <div class="callout amber">The file marked ★ — <code>server/prompts/examiner.js</code> — is where the examiner's behaviour and the marking logic live. Most "how the AI behaves" questions resolve here.</div>
+</div>
+
+<!-- ===================== 4. ARCHITECTURE ===================== -->
+<div class="page break">
+  <h2><span class="n">4</span> System architecture &amp; data flow</h2>
+  <div class="legendrow" style="margin:6px 0 14px">
+    <span><i style="background:var(--cyan)"></i> Browser apps</span>
+    <span><i style="background:var(--indigo)"></i> Our backend</span>
+    <span><i style="background:#334155"></i> External services</span>
+  </div>
+  <div class="flow"><div class="node" style="background:var(--cyan);width:150px">Candidate browser<br/><small>chatbot widget</small></div><div class="arrow">→</div><div class="node" style="background:var(--indigo);width:150px">Backend API<br/><small>Express / Vercel</small></div><div class="arrow">→</div><div class="node" style="background:#334155;width:170px">OpenAI Realtime<br/><small>voice (WebRTC, direct)</small></div></div>
+  <div class="flow"><div class="node" style="background:var(--violet);width:150px">Admin console</div><div class="arrow">→</div><div class="node" style="background:var(--indigo);width:150px">Backend API</div><div class="arrow">↔</div><div class="node" style="background:#334155;width:170px">Supabase<br/><small>Postgres + Auth + RLS</small></div></div>
+  <div class="flow"><div class="node" style="background:var(--indigo);width:150px">Backend API</div><div class="arrow">→</div><div class="node" style="background:#334155;width:320px">Jotform (cases) · OpenAI Chat (grading) · SMTP (email)</div></div>
+
+  <h3>Request lifecycle of a live exam</h3>
+  <ul>
+    <li><b>1. Token mint.</b> The chatbot calls <code>POST /api/realtime/session</code>. The backend builds the examiner prompt (case + personality + standard), asks OpenAI for a short-lived <i>ephemeral</i> key, and returns it. The real <code>OPENAI_API_KEY</code> never leaves the server.</li>
+    <li><b>2. Direct voice.</b> The browser opens a WebRTC connection <i>straight to OpenAI</i> using the ephemeral key — low latency, no audio through our server.</li>
+    <li><b>3. Transcript.</b> Speech-to-text events stream back over the data channel; the chatbot collects the transcript.</li>
+    <li><b>4. Grading.</b> On finish, the chatbot calls <code>POST /api/feedback</code>. The backend grades the transcript against the case's marking criteria (OpenAI Chat) and saves the session to Supabase.</li>
+    <li><b>5. Report + email.</b> The report page renders charts, captures the report to PDF, and calls <code>POST /api/email-report</code> to email it.</li>
+  </ul>
+</div>
+
+<!-- ===================== 5. METHODOLOGY ===================== -->
+<div class="page break">
+  <h2><span class="n">5</span> End-to-end methodology (the exam lifecycle)</h2>
+  <table>
+    <tr><th>#</th><th>Stage</th><th>What happens</th></tr>
+    <tr><td>1</td><td><b>Registration</b></td><td>Candidate enters name + email + chooses an <b>exam</b> (e.g. StAMPS, RACGP CCE). Exams shown come from <code>GET /api/exam-profiles</code> (only exams that have cases).</td></tr>
+    <tr><td>2</td><td><b>Case selection</b></td><td>The examiner greets, states how many cases are available, and asks "which case number, or 'any'?". A specific case can also be forced via the embed URL (<code>?caseId=</code> / <code>?formId=</code>).</td></tr>
+    <tr><td>3</td><td><b>Live oral exam</b></td><td>Two-way voice with the AI examiner. It plays examiner <i>and</i> patient (per the exam's role mode), probes to the exam's standard, and supports barge-in, a countdown timer and auto-termination.</td></tr>
+    <tr><td>4</td><td><b>Marking</b></td><td>The transcript is graded against the case's marking criteria and <b>real total</b> (e.g. 17), with the exam's mark scheme + standard deciding pass/fail. Killer/unsafe items force an automatic fail.</td></tr>
+    <tr><td>5</td><td><b>Report</b></td><td>A visual report (gauge, competency radar, domain bars, strengths, missed items) is shown and saved.</td></tr>
+    <tr><td>6</td><td><b>Email</b></td><td>The exact on-screen report (with charts) is emailed to the candidate as a PDF.</td></tr>
+    <tr><td>7</td><td><b>History</b></td><td>Candidates can look up their past attempts by email; admins see every session + analytics.</td></tr>
+  </table>
+
+  <h3>Mock circuits</h3>
+  <p>Launching with <code>?mock=N</code> runs an N-station circuit back-to-back; each station is graded and saved separately, with a combined circuit summary at the end.</p>
+
+  <h2><span class="n">6</span> The AI examiner &amp; marking engine</h2>
+  <p>The examiner prompt is assembled at session time from: the chosen exam's <b>profile</b> (personality, role mode, mark scheme, standard), the selected <b>case</b> (scenario, patient script, questions, criteria), and global <b>AI config</b> (voice, difficulty, any admin override).</p>
+  <h3>How marking reads the Jotform</h3>
+  <ul>
+    <li><b>SAQ / OSCE cases:</b> every point under "Correct possible answers" = <b>1 mark</b>; the total is the number of points (e.g. 17), not 10.</li>
+    <li><b>MCQ cases:</b> the <code>(Score: N)</code> annotations are summed.</li>
+    <li><b>Pass mark:</b> defaults to 50% of the case total; overridable per case, and the exam's <b>standard</b> guides borderline pass/fail.</li>
+    <li><b>Exam sessions:</b> because the candidate picks a case verbally, the grader is given the exam's cases (deterministic set), identifies which one the transcript covers, and marks against <i>that</i> case's scheme.</li>
+  </ul>
+</div>
+
+<!-- ===================== 7. DATABASE ===================== -->
+<div class="page break">
+  <h2><span class="n">7</span> Database schema (Supabase Postgres)</h2>
+  <h3>exam_questions — the case bank</h3>
+  <table>
+    <tr><th>Column</th><th>Type</th><th>Meaning</th></tr>
+    <tr><td>id</td><td>uuid</td><td>Primary key</td></tr>
+    <tr><td>external_ref</td><td>text</td><td>The Jotform form ID (matching key for CSV)</td></tr>
+    <tr><td>title</td><td>text</td><td>Case title</td></tr>
+    <tr><td>exam_type</td><td>text</td><td>Clinical category (or legacy exam tag)</td></tr>
+    <tr><td>pathway</td><td>text</td><td>The exam the case belongs to (set by admin)</td></tr>
+    <tr><td>stem</td><td>text</td><td>Clinical scenario</td></tr>
+    <tr><td>patient_script</td><td>text</td><td>Examiner-only patient role-play</td></tr>
+    <tr><td>marking_criteria</td><td>jsonb</td><td>Array of markable points</td></tr>
+    <tr><td>model_answer</td><td>text</td><td>Full correct answers</td></tr>
+    <tr><td>examiner_instructions / red_flags / killer_marks / feedback_points</td><td>text</td><td>Examiner-only marking material</td></tr>
+    <tr><td>total_marks / pass_mark / duration_seconds</td><td>int</td><td>Marking controls (real total)</td></tr>
+    <tr><td>status</td><td>text</td><td>draft · active · disabled · archived</td></tr>
+    <tr><td>is_active / in_training</td><td>bool</td><td>Live to candidates / in the curated training set</td></tr>
+  </table>
+  <div class="grid">
+  <h3>exam_profiles — per-exam configuration</h3>
+  <p><code>exam_key</code>, <code>label</code>, <code>examiner_instructions</code> (personality), <code>mode</code> (both/examiner/patient), <code>mark_scheme</code>, <code>standard</code>, <code>enabled</code>.</p>
+  <h3>exam_sessions — completed attempts</h3>
+  <p><code>candidate_name</code>, <code>candidate_email</code>, <code>pathway</code>, <code>exam_type</code>, <code>question_id</code>, <code>form_id</code>, <code>case_title</code>, <code>duration_sec</code>, <code>score</code>, <code>score_override</code>, <code>marks_awarded</code>, <code>total_marks</code>, <code>pass_fail</code>, <code>killer_failed</code>, <code>strengths</code>, <code>improvements</code>, <code>missed_items</code>, <code>unsafe_areas</code>, <code>reviewed</code>, <code>reviewer_note</code>.</p>
+  <h3>session_turns</h3><p>One row per spoken turn: <code>session_id</code>, <code>role</code> (examiner/candidate), <code>text</code>, <code>time_marker</code>.</p>
+  <h3>app_settings</h3><p>Key/value config: <code>ai_config</code>, <code>widget_theme</code>, <code>email_config</code>, <code>openai_fallback</code>, <code>analytics_api_key</code>.</p>
+  <h3>admin_users</h3><p>Admin accounts (<code>id</code> ↔ Supabase Auth, <code>email</code>, <code>role</code>).</p>
+  </div>
+</div>
+
+<!-- ===================== 8. API REFERENCE ===================== -->
+<div class="page break">
+  <h2><span class="n">8</span> Backend API reference</h2>
+  <p>Base URL: <code>https://ai-oral-examiner-mvp-backend.vercel.app</code>. All bodies are JSON. Auth legend:
+    <span class="auth pub">PUBLIC</span> no auth ·
+    <span class="auth">ADMIN</span> Supabase JWT of an admin (Bearer token) ·
+    <span class="auth key">API KEY</span> shared key.</p>
+
+  <h3 style="color:var(--cyan)">Public &amp; candidate</h3>
+
+  <div class="ep"><span class="tag GET">GET</span><span class="path">/api/health</span><span class="auth pub">PUBLIC</span>
+    <p class="muted">Service heartbeat.</p>
+    <pre>200 → { "status":"ok", "service":"passgp-server", "chatModel":"gpt-4o-mini", "realtimeModel":"gpt-realtime" }</pre></div>
+
+  <div class="ep"><span class="tag GET">GET</span><span class="path">/api/widget-theme</span><span class="auth pub">PUBLIC</span>
+    <p class="muted">The admin-selected voice-widget appearance.</p>
+    <pre>200 → { "template": "cosmic" }</pre></div>
+
+  <div class="ep"><span class="tag GET">GET</span><span class="path">/api/exam-profiles</span><span class="auth pub">PUBLIC</span>
+    <p class="muted">Exams a candidate can choose (only those with cases). Drives the registration dropdown.</p>
+    <pre>200 → { "exams":[ { "exam_key":"StAMPS (ACRRM)", "label":"StAMPS (ACRRM)", "caseCount":2 } ] }</pre></div>
+
+  <div class="ep"><span class="tag GET">GET</span><span class="path">/api/candidate/history?email={email}</span><span class="auth pub">PUBLIC</span>
+    <p class="muted">A candidate's own past sessions by email (no transcript).</p>
+    <pre>200 → { "sessions":[ { "id","created_at","exam_type","pathway","case_title",
+        "score","score_override","pass_fail","marks_awarded","total_marks",
+        "summary","strengths","improvements","missed_items","unsafe_areas" } ] }</pre></div>
+
+  <div class="ep"><span class="tag GET">GET</span><span class="path">/api/mock/circuit?count={n}&pathway={p}&exam={e}</span><span class="auth pub">PUBLIC</span>
+    <p class="muted">Generate an N-station mock circuit from the training set.</p>
+    <pre>200 → { "stations":[ { "station":1, "questionId","title","examType","pathway","durationSeconds":480 } ] }
+409 → { "maintenance":true, "error":"…", "stations":[] }   // no trained cases</pre></div>
+
+  <div class="ep"><span class="tag POST">POST</span><span class="path">/api/realtime/session</span><span class="auth pub">PUBLIC</span>
+    <p class="muted">Mint a short-lived OpenAI Realtime token + build the examiner prompt.</p>
+    <h4>Request</h4><pre>{ "candidateName":"Dr Khan", "examType":"StAMPS (ACRRM)", "questionId":null, "formId":null }</pre>
+    <h4>Response</h4><pre>200 → { "value":"&lt;ephemeral key&gt;", "model":"gpt-realtime",
+        "webrtcUrl":"https://api.openai.com/v1/realtime/calls",
+        "questionId","formId","questionTitle","examType","durationSeconds":900 }
+409 → { "maintenance":true, "error":"…" }   // nothing trained for this exam</pre></div>
+
+  <div class="ep"><span class="tag POST">POST</span><span class="path">/api/chat</span><span class="auth pub">PUBLIC</span>
+    <p class="muted">Text (typed) examiner — Server-Sent Events stream.</p>
+    <pre>body → { "messages":[{ "role":"user","content":"…" }], "candidateName","examType" }
+stream → event: delta { "text":"…" } … event: done { "ok":true }</pre></div>
+
+  <div class="ep"><span class="tag POST">POST</span><span class="path">/api/feedback</span><span class="auth pub">PUBLIC</span>
+    <p class="muted">Grade a finished transcript and (optionally) save the session.</p>
+    <h4>Request</h4><pre>{ "transcript":[{ "role":"examiner|candidate", "text":"…", "time":"02:14" }],
+  "examType":"StAMPS (ACRRM)", "questionId":null, "formId":null,
+  "durationSec":423, "save":true,
+  "candidateName":"Dr Khan", "candidateEmail":"dr@x.com", "pathway":"StAMPS (ACRRM)" }</pre>
+    <h4>Response (scored report)</h4><pre>200 → { "candidate_name","overall_score","clinical_reasoning","diagnosis",
+        "management","communication", "marks_awarded":15, "total_marks":17,
+        "pass_mark":9, "pass_fail":"Pass", "killer_failed":false,
+        "strengths":[], "weaknesses":[], "missed_items":[], "unsafe_areas":[],
+        "recommendations":[], "examiner_comments":"…",
+        "score":88, "result":"Competent", "domains":[…], "sessionId":"uuid" }</pre></div>
+
+  <div class="ep"><span class="tag POST">POST</span><span class="path">/api/email-report</span><span class="auth pub">PUBLIC</span>
+    <p class="muted">Email the candidate the rendered report PDF (with charts).</p>
+    <pre>body → { "candidateEmail","candidateName","examType", "pdfBase64":"data:application/pdf;base64,…", "report":{…} }
+200 → { "sent":true }   |   { "sent":false, "reason":"not configured" }</pre></div>
+</div>
+
+<!-- API: ADMIN -->
+<div class="page break">
+  <h2 style="margin-top:0"><span class="n">8</span> API reference — admin <span class="auth">ADMIN</span></h2>
+  <p class="muted">All require header <code>Authorization: Bearer &lt;admin JWT&gt;</code>. The backend verifies the token <i>and</i> that the user exists in <code>admin_users</code>.</p>
+
+  <div class="ep"><span class="tag GET">GET</span><span class="path">/api/admin/questions</span>
+    <p class="muted">All cases (light fields, paginated server-side).</p>
+    <pre>200 → { "questions":[{ "id","title","exam_type","pathway","in_training","is_active","status" }], "total":2941 }</pre></div>
+
+  <div class="ep"><span class="tag GET">GET</span><span class="path">/api/admin/questions/:id</span>
+    <pre>200 → { "question": { …all case fields… } }</pre></div>
+
+  <div class="ep"><span class="tag POST">POST</span><span class="path">/api/admin/questions</span> &nbsp;
+    <span class="tag PUT">PUT</span><span class="path">/api/admin/questions/:id</span> &nbsp;
+    <span class="tag PATCH">PATCH</span><span class="path">/api/admin/questions/:id</span>
+    <p class="muted">Create / replace / partially update a case. Body is the whitelisted case fields:</p>
+    <pre>{ "title","exam_type","pathway","candidate_instructions","stem","patient_script",
+  "marking_criteria":[…], "model_answer","examiner_instructions","red_flags",
+  "feedback_points","total_marks","pass_mark","duration_seconds","killer_marks",
+  "status","is_active","in_training" }
+200 → { "question": {…} }</pre></div>
+
+  <div class="ep"><span class="tag DELETE">DELETE</span><span class="path">/api/admin/questions/:id</span>
+    <pre>200 → { "ok":true }</pre></div>
+
+  <div class="ep"><span class="tag POST">POST</span><span class="path">/api/admin/questions/bulk-update</span>
+    <p class="muted">Update a field on many cases (e.g. assign an exam).</p>
+    <pre>body → { "ids":["uuid",…], "patch":{ "pathway":"RACGP CCE" } }   →   { "updated":240 }</pre></div>
+
+  <div class="ep"><span class="tag POST">POST</span><span class="path">/api/admin/questions/bulk-delete</span>
+    <pre>body → { "ids":["uuid",…] }   →   { "deleted":12 }</pre></div>
+
+  <div class="ep"><span class="tag POST">POST</span><span class="path">/api/admin/exams/assign-csv</span>
+    <p class="muted">Bulk-assign cases to exams from a CSV (matched by Jotform form ID, then title).</p>
+    <pre>body → { "rows":[ { "ref":"250036…", "title":"Case G240", "exam":"AMC" } ] }
+200 → { "matched":612, "updated":612, "byExam":{ "AMC Clinical":240, … }, "unmatched":[…] }</pre></div>
+
+  <div class="ep"><span class="tag POST">POST</span><span class="path">/api/admin/questions/bulk</span>
+    <p class="muted">Bulk upsert cases from a full-field CSV import.</p>
+    <pre>body → { "rows":[ {…case fields…} ] }   →   { "inserted","updated","failed","total" }</pre></div>
+
+  <div class="ep"><span class="tag GET">GET</span><span class="path">/api/admin/questions/export</span>
+    <p class="muted">All cases with every field (for CSV export).</p>
+    <pre>200 → { "questions":[ {…full fields…} ], "total":2948 }</pre></div>
+
+  <div class="ep"><span class="tag POST">POST</span><span class="path">/api/admin/training/set</span>
+    <p class="muted">Add / remove cases from the curated training set.</p>
+    <pre>body → { "ids":["uuid",…], "in_training":true }   →   { "updated":8 }</pre></div>
+
+  <div class="ep"><span class="tag GET">GET</span><span class="path">/api/admin/jotform/forms</span>
+    <pre>200 → { "forms":[{ "id","title","count","status" }], "total":2942 }</pre></div>
+
+  <div class="ep"><span class="tag POST">POST</span><span class="path">/api/admin/jotform/import</span>
+    <p class="muted">Import a batch of Jotform forms (parses marking criteria + real total).</p>
+    <pre>body → { "forms":[{ "id","title" }] }   →   { "imported","updated","failed","total" }</pre></div>
+
+  <div class="ep"><span class="tag GET">GET</span><span class="path">/api/admin/exam-profiles</span> &nbsp;
+    <span class="tag PUT">PUT</span><span class="path">/api/admin/exam-profiles/:examKey</span>
+    <p class="muted">List exams with case counts / upsert a profile.</p>
+    <pre>PUT body → { "label","examiner_instructions","mark_scheme","standard","mode","enabled" }
+200 → { "profile": {…} }</pre></div>
+
+  <div class="ep"><span class="tag GET">GET</span><span class="path">/api/admin/analytics/export</span>
+    <p class="muted">Flat, one-row-per-attempt analytics (JSON) for the in-app export.</p>
+    <pre>200 → { "rows":[{ "session_id","datetime","candidate_name","candidate_email","pathway",
+        "category","case_id","case_title","duration_minutes","marks_awarded","total_marks",
+        "score_percent","final_pass_fail","killer_failed","missed_rubric_items" }], "total":N }</pre></div>
+
+  <div class="ep"><span class="tag POST">POST</span><span class="path">/api/admin/auth/admin-reset-password</span>
+    <p class="muted">A superadmin resets another admin's password.</p>
+    <pre>body → { "email","password" }   →   { "ok":true }</pre></div>
+
+  <h3 style="color:var(--amber)">Analytics API (external)</h3>
+  <div class="ep"><span class="tag GET">GET</span><span class="path">/api/analytics/export?key={KEY}&format=csv|json</span><span class="auth key">API KEY</span>
+    <p class="muted">For Power BI / BI tools to pull directly. Key via <code>?key=</code> or header <code>x-api-key</code>.</p>
+    <pre>200 → CSV (default) or { "rows":[…], "total":N } when format=json
+401 → { "error":"Invalid API key" }   ·   503 → not configured</pre></div>
+</div>
+
+<!-- ===================== 9. INTEGRATIONS ===================== -->
+<div class="page break">
+  <h2><span class="n">9</span> Integrations</h2>
+  <table>
+    <tr><th>Service</th><th>Endpoint / SDK</th><th>Notes</th></tr>
+    <tr><td>OpenAI Realtime</td><td><code>/v1/realtime/client_secrets</code> + WebRTC <code>/v1/realtime/calls</code></td><td>Ephemeral token minted server-side; browser streams voice directly.</td></tr>
+    <tr><td>OpenAI Chat</td><td>OpenAI SDK <code>chat.completions</code></td><td>JSON-mode grading; transparent retry on an admin fallback key.</td></tr>
+    <tr><td>Supabase</td><td><code>@supabase/supabase-js</code> + pooler for migrations</td><td>Service key server-side; anon key in browser; RLS enforced.</td></tr>
+    <tr><td>Jotform</td><td><code>/user/forms</code>, <code>/form/{id}/questions</code></td><td>Paginated import; parses scenario, questions, criteria, marks.</td></tr>
+    <tr><td>Email</td><td>nodemailer SMTP</td><td>Sender + app password from env; default host <code>smtp.gmail.com</code> (override with <code>SMTP_HOST</code>).</td></tr>
+  </table>
+
+  <h2><span class="n">10</span> Environment variables &amp; configuration</h2>
+  <h3>Backend (server / Vercel backend project)</h3>
+  <table>
+    <tr><th>Variable</th><th>Purpose</th></tr>
+    <tr><td><code>OPENAI_API_KEY</code></td><td>OpenAI (voice + grading)</td></tr>
+    <tr><td><code>SUPABASE_URL</code>, <code>SUPABASE_SECRET_KEY</code>, <code>SUPABASE_PUBLISHABLE_KEY</code></td><td>Database + Auth</td></tr>
+    <tr><td><code>JOTFORM_API_KEY</code></td><td>Case import</td></tr>
+    <tr><td><code>Owner_Email</code>, <code>App_Password</code></td><td>Report email sender</td></tr>
+    <tr><td><code>ALLOWED_ORIGINS</code></td><td>Extra CORS origins (PassGP / Kajabi domains)</td></tr>
+    <tr><td><code>ANALYTICS_API_KEY</code></td><td>Protects the Power BI export</td></tr>
+    <tr><td><code>SMTP_HOST</code> <span class="muted">(optional)</span></td><td>Non-Gmail SMTP host</td></tr>
+  </table>
+  <h3>Frontends (admin &amp; chatbot)</h3>
+  <p><code>VITE_SUPABASE_URL</code> · <code>VITE_SUPABASE_ANON_KEY</code> · <code>VITE_API_BASE</code> (the backend URL).</p>
+  <div class="callout">All <code>.env</code> files are git-ignored. Production values live in the Vercel project settings, not in the repository.</div>
+</div>
+
+<!-- ===================== 11-12 SECURITY + DEPLOY ===================== -->
+<div class="page break">
+  <h2><span class="n">11</span> Security model</h2>
+  <ul>
+    <li><b>Secret isolation.</b> API keys exist only on the backend. The browser receives short-lived ephemeral tokens for voice.</li>
+    <li><b>CORS allow-list.</b> Only the PassGP apps (and configured domains) may call the API.</li>
+    <li><b>Row-Level Security.</b> Direct writes to the case bank from the browser are revoked; all create/edit/delete go through authenticated backend endpoints (service role).</li>
+    <li><b>Admin auth.</b> Supabase Auth; every admin endpoint checks the JWT <i>and</i> <code>admin_users</code> membership; superadmin role for sensitive actions.</li>
+    <li><b>Password reset.</b> Secure email-link flow (no password set from email alone).</li>
+    <li><b>Analytics API.</b> Separate shared key, never the database key.</li>
+  </ul>
+
+  <h2><span class="n">12</span> Deployment &amp; operations</h2>
+  <ul>
+    <li><b>CI/CD.</b> GitHub <code>main</code> → Vercel auto-deploys all three projects.</li>
+    <li><b>Migrations.</b> SQL files in <code>server/db/migrations/</code>, applied with <code>node db/runSql.mjs &lt;file&gt;</code> via the Supabase pooler.</li>
+    <li><b>Re-import.</b> Admin → Questions → "Import from Jotform" → Import all re-reads every case's marking scheme.</li>
+    <li><b>Admin login.</b> <code>admin@passgp.au</code> (reset via the login page → emailed link).</li>
+  </ul>
+
+  <div class="callout green"><b>Change behaviour without code:</b> exam personalities / mark schemes / pass standards → <i>Exam Profiles</i>; voice, models, role mode → <i>AI Configuration</i>; which cases are live → <i>Training Panel</i>; keys &amp; email → <i>Settings</i>.</div>
+
+  <div style="text-align:center;color:var(--sub);font-size:12px;margin-top:30px">PassGP — AI Oral Examiner · Technical Documentation · v1.0</div>
+</div>
+
+</body>
+</html>
