@@ -902,7 +902,7 @@ app.post('/api/admin/cases/tag-csv', requireAdmin, async (req, res) => {
     const byTitle = new Map(cases.filter((c) => c.title).map((c) => [c.title.trim().toLowerCase(), c.id]))
     const byCode = new Map() // normalized case code -> [ids]
     for (const c of cases) {
-      const m = (c.title || '').match(/case\s*([a-z]?\s*\d+)/i)
+      const m = (c.title || '').match(/case\s*([a-z]{0,2}\s*\d+)/i)
       if (m) { const code = normCode(m[1]); if (!byCode.has(code)) byCode.set(code, []); byCode.get(code).push(c.id) }
     }
 
