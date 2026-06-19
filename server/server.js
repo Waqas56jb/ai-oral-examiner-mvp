@@ -803,7 +803,7 @@ app.get('/api/admin/questions/:id', requireAdmin, async (req, res) => {
 
 // Whitelist of columns an admin may write (prevents arbitrary column injection).
 const CASE_FIELDS = [
-  'title', 'exam_type', 'pathway', 'candidate_instructions', 'stem', 'patient_script',
+  'title', 'exam_type', 'pathway', 'exam_college', 'exam_name', 'candidate_instructions', 'stem', 'patient_script',
   'marking_criteria', 'model_answer', 'examiner_instructions', 'red_flags', 'feedback_points',
   'total_marks', 'pass_mark', 'duration_seconds', 'killer_marks', 'status', 'is_active', 'in_training',
 ]
@@ -870,6 +870,88 @@ app.post('/api/admin/questions/bulk-update', requireAdmin, async (req, res) => {
       updated += data?.length || 0
     }
     res.json({ updated })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Admin: TAG CASES FROM CSV (PassGP's 4-field upload).
+// Body: { rows: [{ case_number, college, exam_type, category }] }
+//   case_number → matches a case (by Jotform form ID, case code in the title, or title)
+//   college     → EXAM COLLEGE  (RACGP / ACRRM / AMC / IME / RANZCOG / other)
+//   exam_type   → EXAM TYPE     (CCE / STAMPS / Clinical / AKT / KFP / MCQ / other)
+//   category    → CATEGORY      (cardiovascular / respiratory / …)
+// The candidate-facing exam = "{college} {exam_type}" (e.g. "RACGP CCE"); a profile
+// is auto-created for any new exam so candidates can immediately pick it.
+app.post('/api/admin/cases/tag-csv', requireAdmin, async (req, res) => {
+  try {
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : []
+    if (!rows.length) return res.json({ matched: 0, updated: 0, unmatched: [], exams: [] })
+
+    let cases = []
+    let from = 0
+    while (true) {
+      const { data, error } = await supabase.from('exam_questions').select('id, external_ref, title').range(from, from + 999)
+      if (error) return res.status(500).json({ error: error.message })
+      cases = cases.concat(data || [])
+      if (!data || data.length < 1000) break
+      from += 1000
+    }
+    const normCode = (s) => String(s ?? '').toLowerCase().replace(/case/g, '').replace(/[^a-z0-9]/g, '')
+    const byRef = new Map(cases.filter((c) => c.external_ref).map((c) => [String(c.external_ref).trim(), c.id]))
+    const byTitle = new Map(cases.filter((c) => c.title).map((c) => [c.title.trim().toLowerCase(), c.id]))
+    const byCode = new Map() // normalized case code -> [ids]
+    for (const c of cases) {
+      const m = (c.title || '').match(/case\s*([a-z]?\s*\d+)/i)
+      if (m) { const code = normCode(m[1]); if (!byCode.has(code)) byCode.set(code, []); byCode.get(code).push(c.id) }
+    }
+
+    const clean = (v) => String(v ?? '').trim()
+    const updates = []
+    const unmatched = []
+    const examsSet = new Set()
+    for (const r of rows) {
+      const num = clean(r.case_number)
+      const college = clean(r.college)
+      const examName = clean(r.exam_type)
+      const category = clean(r.category)
+      let id = num && byRef.get(num)
+      if (!id) { const cands = byCode.get(normCode(num)); if (cands && cands.length === 1) id = cands[0] }
+      if (!id) id = byTitle.get(num.toLowerCase())
+      if (!id) { unmatched.push({ case_number: num, reason: byCode.get(normCode(num))?.length > 1 ? 'ambiguous code' : 'not found' }); continue }
+      const pathway = [college, examName].filter(Boolean).join(' ')
+      const payload = {}
+      if (college) payload.exam_college = college
+      if (examName) payload.exam_name = examName
+      if (category) payload.exam_type = category
+      if (pathway) payload.pathway = pathway
+      if (!Object.keys(payload).length) { unmatched.push({ case_number: num, reason: 'no fields' }); continue }
+      updates.push({ id, payload })
+      if (pathway) examsSet.add(pathway)
+    }
+
+    // apply grouped by identical payload
+    let updated = 0
+    const groups = new Map()
+    for (const u of updates) { const k = JSON.stringify(u.payload); if (!groups.has(k)) groups.set(k, { payload: u.payload, ids: [] }); groups.get(k).ids.push(u.id) }
+    for (const { payload, ids } of groups.values()) {
+      for (let i = 0; i < ids.length; i += 300) {
+        const { data, error } = await supabase.from('exam_questions').update(payload).in('id', ids.slice(i, i + 300)).select('id')
+        if (error) return res.status(500).json({ error: error.message })
+        updated += data?.length || 0
+      }
+    }
+
+    // auto-create a profile for each new exam so candidates can pick it
+    const exams = [...examsSet]
+    for (const ex of exams) {
+      const { data: existing } = await supabase.from('exam_profiles').select('exam_key').eq('exam_key', ex).maybeSingle()
+      if (!existing) {
+        await supabase.from('exam_profiles').insert({ exam_key: ex, label: ex, mode: 'both', enabled: true, examiner_instructions: `You are running the ${ex} exam.` })
+      }
+    }
+
+    res.json({ matched: updated, updated, unmatched, exams })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }

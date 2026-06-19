@@ -185,7 +185,7 @@ export default function Questions() {
         <div className="page-actions">
           <Button variant="ghost" icon={<FiDownloadCloud />} onClick={() => setImportOpen(true)}>Import from Jotform</Button>
           <Button variant="ghost" icon={<FiUpload />} onClick={() => setCsvOpen(true)}>Import CSV</Button>
-          <Button variant="ghost" icon={<FiTag />} onClick={() => setAssignOpen(true)}>Assign exams (CSV)</Button>
+          <Button variant="ghost" icon={<FiTag />} onClick={() => setAssignOpen(true)}>Upload case tags (CSV)</Button>
           <Button variant="ghost" loading={exporting} onClick={exportCsv}>Export CSV</Button>
           <Button icon={<FiPlus />} onClick={openNew}>Add question</Button>
         </div>
@@ -299,11 +299,16 @@ function pick(obj, names) {
 }
 
 function AssignExamsModal({ onClose, onDone }) {
-  const [rows, setRows] = useState(null) // [{ref,title,exam}]
+  const [rows, setRows] = useState(null) // [{case_number, college, exam_type, category}]
   const [fileName, setFileName] = useState('')
   const [err, setErr] = useState('')
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState(null)
+
+  const downloadTemplate = () => {
+    const csv = 'Case Number,Exam College,Exam Type,Category\nG240,RACGP,CCE,Cardiovascular\nB510,ACRRM,STAMPS,Respiratory\n277,RANZCOG,MCQ,Obstetrics\n'
+    downloadFile('passgp-case-tags-template.csv', csv, 'text/csv')
+  }
 
   const onFile = async (e) => {
     const file = e.target.files?.[0]
@@ -313,11 +318,12 @@ function AssignExamsModal({ onClose, onDone }) {
       const objs = parseCsv(await file.text())
       if (!objs.length) { setErr('No rows found in that CSV.'); setRows(null); return }
       const mapped = objs.map((o) => ({
-        ref: pick(o, ['formid', 'externalref', 'id', 'jotformid', 'form']),
-        title: pick(o, ['title', 'formtitle', 'case', 'casetitle', 'name']),
-        exam: pick(o, ['exam', 'pathway', 'tag', 'folder', 'examtype', 'type']),
-      })).filter((r) => r.exam && (r.ref || r.title))
-      if (!mapped.length) { setErr('Could not find exam + (form ID or title) columns. Headers seen: ' + Object.keys(objs[0]).join(', ')); setRows(null); return }
+        case_number: pick(o, ['casenumber', 'case', 'caseno', 'caseid', 'number', 'formid', 'externalref', 'id']),
+        college: pick(o, ['examcollege', 'college']),
+        exam_type: pick(o, ['examtype', 'exam', 'type']),
+        category: pick(o, ['category', 'clinicalcategory', 'specialty']),
+      })).filter((r) => r.case_number && (r.college || r.exam_type || r.category))
+      if (!mapped.length) { setErr('Need a "Case Number" column + at least one of Exam College / Exam Type / Category. Headers found: ' + Object.keys(objs[0]).join(', ')); setRows(null); return }
       setRows(mapped)
     } catch (e2) {
       setErr('Could not read that file: ' + e2.message)
@@ -327,14 +333,14 @@ function AssignExamsModal({ onClose, onDone }) {
   const run = async () => {
     setRunning(true); setErr('')
     try {
-      let matched = 0, updated = 0, byExam = {}, unmatched = []
+      let matched = 0, updated = 0, unmatched = [], examsSet = new Set()
       for (let i = 0; i < rows.length; i += 400) {
-        const d = await apiPost('/api/admin/exams/assign-csv', { rows: rows.slice(i, i + 400) })
+        const d = await apiPost('/api/admin/cases/tag-csv', { rows: rows.slice(i, i + 400) })
         matched += d.matched || 0; updated += d.updated || 0
         ;(d.unmatched || []).forEach((u) => unmatched.push(u))
-        for (const [k, v] of Object.entries(d.byExam || {})) byExam[k] = (byExam[k] || 0) + v
+        ;(d.exams || []).forEach((x) => examsSet.add(x))
       }
-      setResult({ matched, updated, byExam, unmatched })
+      setResult({ matched, updated, exams: [...examsSet], unmatched })
       onDone()
     } catch (e) {
       setErr(e.message)
@@ -345,12 +351,13 @@ function AssignExamsModal({ onClose, onDone }) {
 
   return (
     <Modal
-      title="Assign exams from CSV"
+      wide
+      title="Upload case tags (CSV)"
       onClose={running ? () => {} : onClose}
       footer={result ? <Button onClick={onClose}>Done</Button> : (
         <>
           <Button variant="ghost" disabled={running} onClick={onClose}>Cancel</Button>
-          <Button loading={running} disabled={!rows?.length} icon={<FiTag />} onClick={run}>Assign {rows?.length || 0} case{rows?.length === 1 ? '' : 's'}</Button>
+          <Button loading={running} disabled={!rows?.length} icon={<FiTag />} onClick={run}>Tag {rows?.length || 0} case{rows?.length === 1 ? '' : 's'}</Button>
         </>
       )}
     >
@@ -358,27 +365,40 @@ function AssignExamsModal({ onClose, onDone }) {
       {result ? (
         <div>
           <div className="alert alert--success" style={{ marginBottom: 12 }}>
-            <FiCheck /><div>Assigned <strong>{result.updated}</strong> case{result.updated === 1 ? '' : 's'} to exams.{result.unmatched.length ? ` ${result.unmatched.length} row(s) didn't match.` : ''}</div>
+            <FiCheck /><div>Tagged <strong>{result.updated}</strong> case{result.updated === 1 ? '' : 's'}.{result.unmatched.length ? ` ${result.unmatched.length} row(s) didn't match.` : ''}</div>
           </div>
-          <div style={{ fontSize: '0.88rem' }}>
-            {Object.entries(result.byExam).map(([ex, n]) => <div key={ex}>• <strong>{ex}</strong>: {n}</div>)}
-          </div>
+          {result.exams.length > 0 && <p style={{ fontSize: '0.88rem' }}>Exams updated / created: {result.exams.map((ex) => <span key={ex} className="badge badge--violet" style={{ marginRight: 6 }}>{ex}</span>)}</p>}
           {result.unmatched.length > 0 && (
             <details style={{ marginTop: 12 }}>
               <summary className="muted" style={{ cursor: 'pointer' }}>{result.unmatched.length} unmatched rows</summary>
               <div className="scrollbox" style={{ maxHeight: 160, marginTop: 8, fontSize: '0.82rem' }}>
-                {result.unmatched.slice(0, 200).map((u, i) => <div key={i} style={{ padding: '3px 8px' }}>{u.ref || u.title || '(blank)'} → {u.exam} <span className="muted">({u.reason})</span></div>)}
+                {result.unmatched.slice(0, 200).map((u, i) => <div key={i} style={{ padding: '3px 8px' }}>{u.case_number || '(blank)'} <span className="muted">({u.reason})</span></div>)}
               </div>
             </details>
           )}
         </div>
       ) : (
         <>
-          <p className="muted" style={{ marginBottom: 12 }}>
-            Upload a CSV with an <strong>exam</strong> column plus a <strong>Form ID</strong> (matches the Jotform form ID we store) or an exact <strong>title</strong>. Exam values like <code>AMC</code>, <code>CCE</code>, <code>StAMPS</code>, <code>ACRRM</code>, <code>PESCI</code>, <code>KFP</code> are recognised automatically. Matching is by form ID first, then title.
+          <p className="muted" style={{ marginBottom: 10 }}>Upload a CSV that tags each case. Use exactly these four column headers:</p>
+          <div className="table-wrap" style={{ marginBottom: 12 }}>
+            <table className="tbl">
+              <thead><tr><th>Column header</th><th>What to put</th><th>Examples</th></tr></thead>
+              <tbody>
+                <tr><td className="tbl__primary">Case Number</td><td>Identifies the case (its code or Jotform form ID)</td><td className="mono">G240 · B510 · 277</td></tr>
+                <tr><td className="tbl__primary">Exam College</td><td>The college</td><td className="mono">RACGP · ACRRM · AMC · IME · RANZCOG · Other</td></tr>
+                <tr><td className="tbl__primary">Exam Type</td><td>The exam</td><td className="mono">CCE · STAMPS · Clinical · AKT · KFP · MCQ · Other</td></tr>
+                <tr><td className="tbl__primary">Category</td><td>Clinical category</td><td className="mono">Cardiovascular · Respiratory · …</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="muted" style={{ fontSize: '0.84rem', marginBottom: 12 }}>
+            The candidate-facing exam becomes <strong>“College + Exam Type”</strong> (e.g. <code>RACGP CCE</code>) and shows up for candidates automatically. Cases are matched by their case code / Jotform form ID.
           </p>
-          <input type="file" accept=".csv,text/csv" onChange={onFile} />
-          {fileName && rows && <p className="muted" style={{ marginTop: 10 }}>{fileName} — <strong>{rows.length}</strong> rows ready (e.g. {rows.slice(0, 3).map((r) => `${r.ref || r.title}→${r.exam}`).join(', ')}…)</p>}
+          <div className="flex items-center gap" style={{ flexWrap: 'wrap' }}>
+            <Button size="sm" variant="ghost" icon={<FiDownloadCloud />} onClick={downloadTemplate}>Download template</Button>
+            <input type="file" accept=".csv,text/csv" onChange={onFile} />
+          </div>
+          {fileName && rows && <p className="muted" style={{ marginTop: 10 }}>{fileName} — <strong>{rows.length}</strong> rows ready (e.g. {rows.slice(0, 2).map((r) => `${r.case_number} → ${[r.college, r.exam_type].filter(Boolean).join(' ')}`).join(', ')}…)</p>}
         </>
       )}
     </Modal>
