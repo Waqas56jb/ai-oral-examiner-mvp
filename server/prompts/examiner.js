@@ -111,6 +111,12 @@ export function normalizeQuestion(q) {
     passMark: q.pass_mark != null ? Number(q.pass_mark) : null,
     killerMarks: q.killer_marks || '',
     durationSeconds: Number(q.duration_seconds) > 0 ? Number(q.duration_seconds) : 480,
+    // per-case training fields
+    prepSeconds: Number(q.prep_seconds) > 0 ? Number(q.prep_seconds) : 0,
+    expectedStandard: q.expected_standard || '',
+    commonErrors: q.common_errors || '',
+    evidenceBase: q.evidence_base || '',
+    teachingNotes: q.teaching_notes || '',
   }
 }
 
@@ -157,6 +163,11 @@ export function buildExaminerInstructions({ examType, candidateName = '', forVoi
     c.examinerInstructions && `Examiner instructions: ${c.examinerInstructions}`,
     c.redFlags && `Red flags the candidate MUST identify: ${c.redFlags}`,
     c.feedbackPoints && `Feedback points to cover at the end: ${c.feedbackPoints}`,
+    c.expectedStandard && `Expected candidate standard (probe to this level): ${c.expectedStandard}`,
+    c.commonErrors && `Common candidate errors to watch for: ${c.commonErrors}`,
+    c.evidenceBase && `Evidence base / references: ${c.evidenceBase}`,
+    c.teachingNotes && `Teaching notes for you (the AI): ${c.teachingNotes}`,
+    (c.prepSeconds || c.durationSeconds) && `Timing — preparation: ${c.prepSeconds ? Math.round(c.prepSeconds / 60) + ' min' : 'n/a'}, consultation: ${Math.round((c.durationSeconds || 480) / 60)} min.`,
   ]
     .filter(Boolean)
     .join('\n')
@@ -335,7 +346,7 @@ ${model}
 
 RED FLAGS the candidate must identify: ${c.redFlags || '(none specified)'}
 KILLER / UNSAFE MARKS (if the candidate does or misses any of these it is a critical safety failure → automatic FAIL): ${c.killerMarks || '(none specified)'}
-
+${c.expectedStandard ? `EXPECTED CANDIDATE STANDARD (the bar to pass): ${c.expectedStandard}\n` : ''}${c.commonErrors ? `COMMON CANDIDATE ERRORS (watch for these): ${c.commonErrors}\n` : ''}
 SCORING:
 - Total marks available: ${total}
 - Pass mark: ${pass}

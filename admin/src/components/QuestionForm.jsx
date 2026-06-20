@@ -56,7 +56,12 @@ export function rowToForm(d = {}) {
     feedback_points: d.feedback_points || '',
     total_marks: d.total_marks ?? 10,
     pass_mark: d.pass_mark ?? 5,
+    prep_minutes: d.prep_seconds ? Math.round(d.prep_seconds / 60) : 2,
     duration_minutes: d.duration_seconds ? Math.round(d.duration_seconds / 60) : 8,
+    expected_standard: d.expected_standard || '',
+    common_errors: d.common_errors || '',
+    evidence_base: d.evidence_base || '',
+    teaching_notes: d.teaching_notes || '',
     status: d.status || (d.is_active === false ? 'disabled' : 'active'),
   }
 }
@@ -78,7 +83,12 @@ export function formToPayload(f) {
     feedback_points: f.feedback_points.trim() || null,
     total_marks: Math.max(1, Number(f.total_marks) || 10),
     pass_mark: Math.max(0, Number(f.pass_mark) || 0),
+    prep_seconds: Math.max(0, (Number(f.prep_minutes) || 0) * 60),
     duration_seconds: Math.max(60, (Number(f.duration_minutes) || 8) * 60),
+    expected_standard: (f.expected_standard || '').trim() || null,
+    common_errors: (f.common_errors || '').trim() || null,
+    evidence_base: (f.evidence_base || '').trim() || null,
+    teaching_notes: (f.teaching_notes || '').trim() || null,
     status: f.status || 'draft',
     // keep is_active in sync for backward compatibility (only 'active' is live)
     is_active: f.status === 'active',
@@ -118,14 +128,17 @@ export default function QuestionForm({ form, set, categories = [] }) {
         <AutoTextarea value={form.patient_script} onChange={f('patient_script')} maxHeight={300} placeholder="Opening line, history, hidden concerns, what to reveal only when asked…" />
       </Field>
 
-      <div className="grid grid-3" style={{ gap: 16 }}>
+      <div className="grid grid-2" style={{ gap: 16 }}>
         <Field label="Total marks">
           <input className="input" type="number" min="1" value={form.total_marks} onChange={f('total_marks')} />
         </Field>
         <Field label="Pass mark">
           <input className="input" type="number" min="0" value={form.pass_mark} onChange={f('pass_mark')} />
         </Field>
-        <Field label="Time limit (minutes)">
+        <Field label="Preparation time (minutes)">
+          <input className="input" type="number" min="0" value={form.prep_minutes} onChange={f('prep_minutes')} />
+        </Field>
+        <Field label="Consultation time (minutes)">
           <input className="input" type="number" min="1" value={form.duration_minutes} onChange={f('duration_minutes')} />
         </Field>
       </div>
@@ -153,6 +166,22 @@ export default function QuestionForm({ form, set, categories = [] }) {
 
       <Field label="Feedback points">
         <AutoTextarea value={form.feedback_points} onChange={f('feedback_points')} maxHeight={180} placeholder="Key teaching points for feedback…" />
+      </Field>
+
+      <Field label="Expected candidate standard">
+        <AutoTextarea value={form.expected_standard} onChange={f('expected_standard')} maxHeight={180} placeholder="What a good candidate does at this level — the bar the examiner probes to." />
+      </Field>
+
+      <Field label="Common candidate errors">
+        <AutoTextarea value={form.common_errors} onChange={f('common_errors')} maxHeight={180} placeholder="Typical mistakes — so the examiner can probe and the grader can spot them." />
+      </Field>
+
+      <Field label="Evidence base / references">
+        <AutoTextarea value={form.evidence_base} onChange={f('evidence_base')} maxHeight={160} placeholder="Guidelines / sources this case is based on (RANZCOG, NICE…)." />
+      </Field>
+
+      <Field label="Teaching notes for AI">
+        <AutoTextarea value={form.teaching_notes} onChange={f('teaching_notes')} maxHeight={180} placeholder="Any extra guidance for the AI examiner on how to run / mark this case." />
       </Field>
 
       <Field label="Status">

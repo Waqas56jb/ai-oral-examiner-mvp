@@ -805,7 +805,9 @@ app.get('/api/admin/questions/:id', requireAdmin, async (req, res) => {
 const CASE_FIELDS = [
   'title', 'exam_type', 'pathway', 'exam_college', 'exam_name', 'candidate_instructions', 'stem', 'patient_script',
   'marking_criteria', 'model_answer', 'examiner_instructions', 'red_flags', 'feedback_points',
-  'total_marks', 'pass_mark', 'duration_seconds', 'killer_marks', 'status', 'is_active', 'in_training',
+  'total_marks', 'pass_mark', 'duration_seconds', 'prep_seconds', 'killer_marks',
+  'expected_standard', 'common_errors', 'evidence_base', 'teaching_notes',
+  'status', 'is_active', 'in_training',
 ]
 function pickCaseFields(body = {}) {
   const out = {}
