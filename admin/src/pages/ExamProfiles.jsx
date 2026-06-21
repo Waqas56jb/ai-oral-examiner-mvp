@@ -32,8 +32,15 @@ export default function ExamProfiles() {
       await apiPut(`/api/admin/exam-profiles/${encodeURIComponent(editing.exam_key)}`, {
         label: editing.label,
         examiner_instructions: editing.examiner_instructions,
-        mark_scheme: editing.mark_scheme,
+        prep_seconds: editing.prep_minutes ? Number(editing.prep_minutes) * 60 : null,
+        consult_seconds: editing.consult_minutes ? Number(editing.consult_minutes) * 60 : null,
         standard: editing.standard,
+        mark_scheme: editing.mark_scheme,
+        critical_fail: editing.critical_fail,
+        common_errors: editing.common_errors,
+        evidence_base: editing.evidence_base,
+        model_answer: editing.model_answer,
+        teaching_notes: editing.teaching_notes,
         mode: editing.mode,
         enabled: editing.enabled,
       })
@@ -76,7 +83,7 @@ export default function ExamProfiles() {
                     </td>
                     <td>{r.enabled ? <Badge color="green" dot>Available</Badge> : <Badge color="slate">Hidden</Badge>}</td>
                     <td style={{ textAlign: 'right' }}>
-                      <Button size="sm" variant="ghost" icon={<FiEdit2 />} onClick={() => setEditing({ ...r })}>Edit</Button>
+                      <Button size="sm" variant="ghost" icon={<FiEdit2 />} onClick={() => setEditing({ ...r, prep_minutes: r.prep_seconds ? Math.round(r.prep_seconds / 60) : '', consult_minutes: r.consult_seconds ? Math.round(r.consult_seconds / 60) : '' })}>Edit</Button>
                     </td>
                   </tr>
                 ))}
@@ -115,31 +122,52 @@ export default function ExamProfiles() {
           <Field label="Examiner personality / how to run this exam">
             <textarea
               className="textarea"
-              style={{ minHeight: 130 }}
+              style={{ minHeight: 110 }}
               value={editing.examiner_instructions}
               onChange={(e) => setEditing((s) => ({ ...s, examiner_instructions: e.target.value }))}
               placeholder={'e.g. For the CCE patient exam, play a patient who is anxious and talkative. As a StAMPS examiner, focus hard on emergencies and rural safety…'}
             />
           </Field>
 
-          <Field label="What mark scheme am I using?">
-            <textarea
-              className="textarea"
-              style={{ minHeight: 110 }}
-              value={editing.mark_scheme || ''}
-              onChange={(e) => setEditing((s) => ({ ...s, mark_scheme: e.target.value }))}
-              placeholder={'e.g. Each case is marked against its criteria. 8 stations, each scored independently. A pass needs a satisfactory rating in safety and management across the circuit.'}
-            />
+          <p className="muted" style={{ fontSize: '0.84rem', margin: '4px 0 10px' }}>
+            <strong>Exam-wide defaults</strong> — these apply the same format/standard to <strong>every case in {editing.label}</strong> (they mirror the case editor fields, at exam level).
+          </p>
+
+          <div className="grid grid-2" style={{ gap: 16 }}>
+            <Field label="Preparation time (minutes)">
+              <input className="input" type="number" min="0" value={editing.prep_minutes ?? ''} onChange={(e) => setEditing((s) => ({ ...s, prep_minutes: e.target.value }))} />
+            </Field>
+            <Field label="Consultation time (minutes)">
+              <input className="input" type="number" min="0" value={editing.consult_minutes ?? ''} onChange={(e) => setEditing((s) => ({ ...s, consult_minutes: e.target.value }))} />
+            </Field>
+          </div>
+
+          <Field label="Expected candidate standard">
+            <textarea className="textarea" style={{ minHeight: 100 }} value={editing.standard || ''} onChange={(e) => setEditing((s) => ({ ...s, standard: e.target.value }))} placeholder="What a good candidate does at this level — the bar the examiner probes to." />
           </Field>
 
-          <Field label="What is the standard for this exam, and how would a good candidate answer?">
-            <textarea
-              className="textarea"
-              style={{ minHeight: 130 }}
-              value={editing.standard || ''}
-              onChange={(e) => setEditing((s) => ({ ...s, standard: e.target.value }))}
-              placeholder={'e.g. A good StAMPS candidate works safely with limited resources, escalates/retrieves appropriately, gives specific drug doses, and communicates a clear plan. Pass = covers the critical safety steps and the core management; fail = misses a killer step or is unsafe.'}
-            />
+          <Field label="Marking rubric">
+            <textarea className="textarea" style={{ minHeight: 100 }} value={editing.mark_scheme || ''} onChange={(e) => setEditing((s) => ({ ...s, mark_scheme: e.target.value }))} placeholder="How this exam is marked (e.g. each case against its criteria; pass needs safety + management)." />
+          </Field>
+
+          <Field label="Critical fail criteria">
+            <textarea className="textarea" style={{ minHeight: 90 }} value={editing.critical_fail || ''} onChange={(e) => setEditing((s) => ({ ...s, critical_fail: e.target.value }))} placeholder="What causes an automatic fail in this exam (unsafe acts, missed killer steps)." />
+          </Field>
+
+          <Field label="Common candidate errors">
+            <textarea className="textarea" style={{ minHeight: 90 }} value={editing.common_errors || ''} onChange={(e) => setEditing((s) => ({ ...s, common_errors: e.target.value }))} placeholder="Typical mistakes — so the examiner probes and the grader spots them." />
+          </Field>
+
+          <Field label="Evidence base / references">
+            <textarea className="textarea" style={{ minHeight: 80 }} value={editing.evidence_base || ''} onChange={(e) => setEditing((s) => ({ ...s, evidence_base: e.target.value }))} placeholder="Guidelines / sources this exam follows (RACGP, ACRRM, NICE…)." />
+          </Field>
+
+          <Field label="Model answer">
+            <textarea className="textarea" style={{ minHeight: 90 }} value={editing.model_answer || ''} onChange={(e) => setEditing((s) => ({ ...s, model_answer: e.target.value }))} placeholder="A model answer / approach for this exam (examiner reference)." />
+          </Field>
+
+          <Field label="Teaching notes for AI">
+            <textarea className="textarea" style={{ minHeight: 90 }} value={editing.teaching_notes || ''} onChange={(e) => setEditing((s) => ({ ...s, teaching_notes: e.target.value }))} placeholder="Any extra guidance for the AI on how to run / mark this exam." />
           </Field>
           <p className="muted" style={{ fontSize: '0.82rem', marginTop: -4 }}>
             These train both the live examiner (what to probe for) and the grader (how to decide pass/fail) for every {editing.label} session.

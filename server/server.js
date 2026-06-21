@@ -695,6 +695,13 @@ app.get('/api/admin/exam-profiles', requireAdmin, async (_req, res) => {
       examiner_instructions: p.examiner_instructions || '',
       mark_scheme: p.mark_scheme || '',
       standard: p.standard || '',
+      prep_seconds: p.prep_seconds ?? null,
+      consult_seconds: p.consult_seconds ?? null,
+      critical_fail: p.critical_fail || '',
+      common_errors: p.common_errors || '',
+      evidence_base: p.evidence_base || '',
+      model_answer: p.model_answer || '',
+      teaching_notes: p.teaching_notes || '',
       mode: p.mode || 'both',
       enabled: p.enabled ?? true,
       caseCount: p.caseCount || 0,
@@ -708,15 +715,24 @@ app.get('/api/admin/exam-profiles', requireAdmin, async (_req, res) => {
 app.put('/api/admin/exam-profiles/:examKey', requireAdmin, async (req, res) => {
   try {
     const exam_key = req.params.examKey
-    const { label, examiner_instructions, mode, enabled, mark_scheme, standard } = req.body || {}
+    const b = req.body || {}
+    const num = (v) => (v === '' || v == null ? null : Number(v))
     const payload = {
       exam_key,
-      label: label ?? exam_key,
-      examiner_instructions: examiner_instructions ?? '',
-      mark_scheme: mark_scheme ?? '',
-      standard: standard ?? '',
-      mode: ['both', 'examiner', 'patient'].includes(mode) ? mode : 'both',
-      enabled: enabled !== false,
+      label: b.label ?? exam_key,
+      examiner_instructions: b.examiner_instructions ?? '',
+      mark_scheme: b.mark_scheme ?? '',
+      standard: b.standard ?? '',
+      // full per-exam training fields (mirror the case editor)
+      prep_seconds: num(b.prep_seconds),
+      consult_seconds: num(b.consult_seconds),
+      critical_fail: b.critical_fail ?? '',
+      common_errors: b.common_errors ?? '',
+      evidence_base: b.evidence_base ?? '',
+      model_answer: b.model_answer ?? '',
+      teaching_notes: b.teaching_notes ?? '',
+      mode: ['both', 'examiner', 'patient'].includes(b.mode) ? b.mode : 'both',
+      enabled: b.enabled !== false,
       updated_at: new Date().toISOString(),
     }
     const { data, error } = await supabase.from('exam_profiles').upsert(payload, { onConflict: 'exam_key' }).select('*').single()

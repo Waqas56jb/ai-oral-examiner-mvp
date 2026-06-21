@@ -48,6 +48,24 @@ function examFormatNote(pathway, examType) {
   return f ? `\n# EXAM FORMAT — ${f.name}\nRun this station in the style of this exam: ${f.note}` : ''
 }
 
+// Exam-wide training defaults from the exam profile — applies the same standard,
+// rubric and format to EVERY case in that exam. Used by the examiner & grader.
+function examProfileTraining(profile) {
+  if (!profile) return ''
+  const mins = (s) => (Number(s) > 0 ? Math.round(Number(s) / 60) + ' min' : 'n/a')
+  const lines = [
+    profile.standard && `EXPECTED CANDIDATE STANDARD (probe to this level): ${profile.standard}`,
+    profile.mark_scheme && `MARKING RUBRIC for this exam: ${profile.mark_scheme}`,
+    profile.critical_fail && `CRITICAL FAIL criteria (automatic fail): ${profile.critical_fail}`,
+    profile.common_errors && `COMMON candidate errors to watch for: ${profile.common_errors}`,
+    profile.evidence_base && `EVIDENCE base / references: ${profile.evidence_base}`,
+    profile.model_answer && `MODEL answer / approach (examiner reference): ${profile.model_answer}`,
+    profile.teaching_notes && `TEACHING notes: ${profile.teaching_notes}`,
+    (profile.prep_seconds || profile.consult_seconds) && `TIMING — preparation: ${mins(profile.prep_seconds)}, consultation: ${mins(profile.consult_seconds)}.`,
+  ].filter(Boolean)
+  return lines.length ? `\n\n# EXAM-WIDE STANDARD & MARKING (applies to EVERY case in this exam):\n${lines.map((l) => '- ' + l).join('\n')}` : ''
+}
+
 /** The competency domains scored in the feedback report. */
 export const FEEDBACK_DOMAINS = [
   'Clinical Reasoning',
@@ -407,7 +425,7 @@ export function buildExamSessionInstructions({ exam, profile, cases = [], candid
   const system = `
 You are the PassGP AI Oral Examiner for the ${profile?.label || exam} exam.
 
-${personality ? `# THIS EXAM'S EXAMINER PERSONALITY (set by PassGP — follow it closely):\n${personality}\n` : ''}${roleSectionFor(mode)}${examFormatNote(exam, exam)}${profile?.standard ? `\n\n# EXAM STANDARD (what a GOOD candidate does for this exam — probe to this level):\n${profile.standard}` : ''}${profile?.mark_scheme ? `\n\n# MARK SCHEME for this exam (how it is marked):\n${profile.mark_scheme}` : ''}
+${personality ? `# THIS EXAM'S EXAMINER PERSONALITY (set by PassGP — follow it closely):\n${personality}\n` : ''}${roleSectionFor(mode)}${examFormatNote(exam, exam)}${examProfileTraining(profile)}
 
 # OPENING (do this once)
 - Greet the candidate${candidateName ? ` (${candidateName})` : ''} warmly and confirm this is the ${profile?.label || exam} exam.
@@ -447,8 +465,11 @@ export function buildExamMarksFeedbackPrompt(transcript = [], cases = [], profil
     .map((t) => `${t.role === 'examiner' ? 'EXAMINER' : 'CANDIDATE'}: ${t.text}`)
     .join('\n')
   const standardBlock = [
-    profile?.mark_scheme && `MARK SCHEME for this exam (apply it): ${profile.mark_scheme}`,
-    profile?.standard && `STANDARD — what a good candidate does / the pass bar for this exam: ${profile.standard}`,
+    profile?.mark_scheme && `MARKING RUBRIC for this exam (apply it): ${profile.mark_scheme}`,
+    profile?.standard && `EXPECTED STANDARD — what a good candidate does / the pass bar: ${profile.standard}`,
+    profile?.critical_fail && `CRITICAL FAIL criteria (automatic fail): ${profile.critical_fail}`,
+    profile?.common_errors && `COMMON candidate errors to penalise: ${profile.common_errors}`,
+    profile?.model_answer && `MODEL answer / approach (reference for full marks): ${profile.model_answer}`,
   ].filter(Boolean).join('\n')
   const blocks = cases
     .map((raw, i) => {
